@@ -27,6 +27,7 @@ export function validateBackup(input:unknown):Backup {
   const checked=backupRecordSchemas[row.kind].safeParse(row.value);
   if(!checked.success||row.id!==`${row.dataset}:${row.value.id}`)throw new Error(`Некорректная запись в файле: ${row.id}.`);
   if(row.kind==="person"){
+   if(row.value.kind!=="teacher"&&row.value.groupAssignments!==undefined)throw new Error("Назначения групп доступны только учителям.");
    if(row.value.kind==="student"&&(!row.value.teacherId||!row.value.age||!row.value.level))throw new Error("В карточке ученика отсутствует учитель, возраст или уровень.");
    people.set(row.id,row.value);
   }
@@ -42,8 +43,11 @@ export function validateBackup(input:unknown):Backup {
   if(row.value.groupId&&(row.kind==="person"||row.kind==="check")){
    const group=groups.get(`${row.dataset}:${row.value.groupId}`);
    if(!group)throw new Error("В файле отсутствует группа ученика или проверки.");
-   if(row.kind==="person"&&(row.value.kind!=="student"||row.value.gender!==group.gender||row.value.branch!==group.branch||row.value.teacherId!==group.teacherId||row.value.groups!==group.name))throw new Error("Карточка ученика не соответствует его группе.");
+   const assignments=people.get(`${row.dataset}:${row.value.teacherId}`)?.groupAssignments;
+   const linked=row.value.teacherId===group.teacherId||Array.isArray(assignments)&&assignments.some((a:{groupId:string})=>a.groupId===group.id);
+   if(row.kind==="person"&&(row.value.kind!=="student"||row.value.gender!==group.gender||row.value.branch!==group.branch||!linked||row.value.groups!==group.name))throw new Error("Карточка ученика не соответствует его группе.");
   }
+  if(row.kind==="person"&&Array.isArray(row.value.groupAssignments))for(const assignment of row.value.groupAssignments){const group=groups.get(`${row.dataset}:${assignment.groupId}`);if(!group||group.branch!==row.value.branch)throw new Error("Назначенная учителю группа отсутствует или относится к другому филиалу.")}
   if(row.kind==="group"&&people.get(`${row.dataset}:${row.value.teacherId}`)?.branch!==row.value.branch)throw new Error("Филиал группы не соответствует филиалу учителя.");
   if(row.kind==="check"&&row.value.assessmentType==="reading"&&people.get(`${row.dataset}:${row.value.personId}`)?.kind!=="student")throw new Error("Проверка чтения должна относиться к ученику.");
  }

@@ -27,17 +27,17 @@ await post("group",{...group,studentIds:["pages-student"]});
 await post("check",{id:"pages-reading",personId:"pages-student",groupId:group.id,teacherId:teacher.id,assessmentType:"reading",readingMode:"quran",date:"2026-10-01",makhraj:4,tajweed:6,note:"Повторить буквы"});
 let data=await storage.readData("work");assert.equal(groups.groupResult(data,group),5);assert.equal(groups.priorityStudents(data,group).length,1);
 await post("person",{...teacher,id:"pages-new-teacher",name:"Второй учитель",groupIds:[group.id]});
-data=await storage.readData("work");assert.equal(data.people.find(p=>p.id==="pages-student").teacherId,"pages-new-teacher");
+data=await storage.readData("work");assert.equal(data.people.find(p=>p.id==="pages-student").teacherId,teacher.id);
 const before=saved.get(storage.PREVIEW_STORAGE_KEY),oldError=console.error;failWrite=true;console.error=()=>{};
-try{await post("branch",{id:"pages-split",name:"Новый филиал",source:teacher.branch,teacherIds:["pages-new-teacher"]},503)}finally{failWrite=false;console.error=oldError}
+try{await post("branch",{id:"pages-split",name:"Новый филиал",source:teacher.branch,teacherIds:[teacher.id,"pages-new-teacher"]},503)}finally{failWrite=false;console.error=oldError}
 assert.equal(saved.get(storage.PREVIEW_STORAGE_KEY),before);
-await post("branch",{id:"pages-split",name:"Новый филиал",source:teacher.branch,teacherIds:["pages-new-teacher"]});
+await post("branch",{id:"pages-split",name:"Новый филиал",source:teacher.branch,teacherIds:[teacher.id,"pages-new-teacher"]});
 data=await storage.readData("work");assert.equal(data.people.find(p=>p.id==="pages-student").branch,"Новый филиал");assert.equal(data.groups[0].branch,"Новый филиал");assert.equal(data.checks.length,1);
 await post("check",{...data.checks[0],makhraj:11},400);
 assert.equal((await storage.readData("demo")).people.length,104);
-await verifyTeacherGroups({post,readData:()=>storage.readData("work"),branch:teacher.branch,async failWrites(payload){const oldError=console.error;failWrite=true;console.error=()=>{};try{await post("person",payload,503)}finally{failWrite=false;console.error=oldError}}});
+await verifyTeacherGroups({post,model,groupHelpers:groups,readData:()=>storage.readData("work"),branch:teacher.branch,async failWrites(payload){const oldError=console.error;failWrite=true;console.error=()=>{};try{await post("person",payload,503)}finally{failWrite=false;console.error=oldError}}});
 data=await storage.readData("work");
 const response=await backupApi.GET();assert.equal(response.status,200);const exported=await response.json();assert.equal(exported.version,3);
 const restore=await backupApi.POST(new Request("https://preview.test/api/backup",{method:"POST",headers:{Origin:"https://preview.test","Content-Type":"application/json"},body:JSON.stringify(exported)}));assert.equal(restore.status,200);assert.deepEqual(await storage.readData("work"),data);
 const invalid=await backupApi.POST(new Request("https://preview.test/api/backup",{method:"POST",headers:{Origin:"https://preview.test","Content-Type":"application/json"},body:'{"format":"wrong"}'}));assert.equal(invalid.status,400);assert.deepEqual(await storage.readData("work"),data);
-console.log("PASS: GitHub preview persistence, isolated datasets, groups/readings, teacher transfer, branch split, write rollback, validation, backup export/restore and invalid-backup preservation.");
+console.log("PASS: GitHub preview persistence, isolated datasets, groups/readings, shared teacher assignment, branch split, write rollback, validation, backup export/restore and invalid-backup preservation.");

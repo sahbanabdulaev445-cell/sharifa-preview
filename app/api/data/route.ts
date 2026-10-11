@@ -1,7 +1,7 @@
 import {readData,saveRecords} from "@/lib/storage";
-import {recordSchemas as schemas,groupMembersSchema,newTeacherGroupsSchema,groupSchedulesSchema} from "@/lib/record-schemas";
+import {recordSchemas as schemas,groupMembersSchema,groupSchedulesSchema,lessonTimesSchema} from "@/lib/record-schemas";
 import {Group,Person,Branch,branchNames} from "@/lib/analytics";
-import {availableGroups,groupStudents} from "@/lib/groups";
+import {availableGroups,groupStudents,teacherHasGroup,teacherGroup,groupTeachers} from "@/lib/groups";
 import {getChatGPTUser} from "@/app/chatgpt-auth";
 export const dynamic="force-dynamic";
 
@@ -32,6 +32,7 @@ export async function POST(req:Request){
    if((b.source&&!members.data.length)||(!b.source&&members.data.length))return reply({error:"Для разделения выберите исходный филиал и учителей"},400);
    const selected=d.people.filter(p=>members.data.includes(p.id)&&p.kind==="teacher"&&!p.archived&&p.branch===b.source);
    if(selected.length!==members.data.length)return reply({error:"Выберите учителей исходного филиала"},400);
+   for(const g of groups){const participants=[...new Set([g.teacherId,...groupTeachers(d,g).map(t=>t.id)])];if(participants.some(id=>members.data.includes(id))&&participants.some(id=>!members.data.includes(id)))return reply({error:`Группа «${g.name}» общая. Для переноса в новый филиал выберите всех её преподавателей.`},400)}
    for(const p of d.people.filter(p=>members.data.includes(p.id)||p.kind==="student"&&members.data.includes(p.teacherId??"")))writes.push({kind:"person",value:{...p,branch:b.name}});
    const movedGroups=new Map([...d.groups,...groups].filter(g=>members.data.includes(g.teacherId)).map(g=>[g.id,g]));
    for(const g of movedGroups.values())writes.push({kind:"group",value:{...g,branch:b.name}});
@@ -50,47 +51,37 @@ export async function POST(req:Request){
    const nextGroups=[...groups.filter(other=>other.id!==g.id),g];
    for(const teacherId of new Set([g.teacherId,...(old?[old.teacherId]:[])])){
     const t=d.people.find(p=>p.id===teacherId)!;
-    writes.push({kind:"person",value:{...t,groups:[...new Set(nextGroups.filter(other=>other.teacherId===teacherId).map(other=>other.name))].join(", ")}});
+    writes.push({kind:"person",value:{...t,...(teacherId===g.teacherId&&t.groupAssignments&&!t.groupAssignments.some(a=>a.groupId===g.id)?{groupAssignments:[...t.groupAssignments,{groupId:g.id,days:g.days,startTime:g.startTime,endTime:g.endTime}]}:{}),groups:[...new Set(nextGroups.filter(other=>other.id===g.id&&teacherId===g.teacherId||teacherHasGroup(d,other,teacherId)).map(other=>other.name))].join(", ")}});
    }
   }
   if(kind==="person"&&"kind"in value){
    const p=value as Person,previous=d.people.find(other=>other.id===p.id);
    if(previous&&previous.kind!==p.kind)return reply({error:"Тип существующей карточки нельзя менять"},400);
    if(p.kind==="student"){
+    if(p.groupAssignments)return reply({error:"Группы преподавания доступны только учителям"},400);
     if(!p.teacherId||!p.age||!p.level)return reply({error:"Укажите учителя, возраст и уровень ученика"},400);
     const t=d.people.find(other=>other.id===p.teacherId&&other.kind==="teacher"&&!other.archived);
     if(!t||t.branch!==p.branch)return reply({error:"Учитель должен работать в выбранном филиале"},400);
-    if(p.groupId){const g=groups.find(g=>g.id===p.groupId);if(!g||g.teacherId!==p.teacherId||g.branch!==p.branch||g.gender!==p.gender||g.name!==p.groups)return reply({error:"Выберите группу нужного пола, филиала и учителя"},400);if(!d.groups.some(other=>other.id===g.id))writes.push({kind:"group",value:g})}
-    else if(p.groups){if(!t.groups.split(",").map(x=>x.trim()).includes(p.groups))return reply({error:"Группа ученика должна входить в список групп учителя"},400);const explicit=d.groups.find(g=>g.teacherId===p.teacherId&&g.name===p.groups&&g.gender===p.gender);if(explicit)p.groupId=explicit.id}
+    if(p.groupId){const g=groups.find(g=>g.id===p.groupId);if(!g||!(g.teacherId===p.teacherId||teacherHasGroup(d,g,p.teacherId))||g.branch!==p.branch||g.gender!==p.gender||g.name!==p.groups)return reply({error:"Выберите группу нужного пола, филиала и учителя"},400);if(!d.groups.some(other=>other.id===g.id))writes.push({kind:"group",value:g})}
+    else if(p.groups){if(!t.groups.split(",").map(x=>x.trim()).includes(p.groups))return reply({error:"Группа ученика должна входить в список групп учителя"},400);const explicit=d.groups.find(g=>teacherHasGroup(d,g,p.teacherId!)&&g.name===p.groups&&g.gender===p.gender);if(explicit)p.groupId=explicit.id}
    }else{
-    if(body.value.groupIds!==undefined||body.value.newGroups!==undefined||body.value.groupSchedules!==undefined){
-     const ids=groupMembersSchema.safeParse(body.value.groupIds??groups.filter(g=>g.teacherId===p.id).map(g=>g.id));
+    if(body.value.newGroups?.length)return reply({error:"Создайте группу отдельно в разделе «Группы и занятия»"},400);
+    if(body.value.groupIds!==undefined||body.value.groupSchedules!==undefined||p.groupAssignments!==undefined){
+     const ids=groupMembersSchema.safeParse(body.value.groupIds??p.groupAssignments?.map(a=>a.groupId)??groups.filter(g=>teacherHasGroup(d,g,p.id)).map(g=>g.id));
+     const schedules=groupSchedulesSchema.safeParse(body.value.groupSchedules??[]);
      if(!ids.success)return reply({error:"Некорректный список групп"},400);
-     const drafts=newTeacherGroupsSchema.safeParse(body.value.newGroups??[]),schedules=groupSchedulesSchema.safeParse(body.value.groupSchedules??[]);
-     if(!drafts.success)return reply({error:drafts.error.issues.map(i=>i.message).join(". ")},400);
      if(!schedules.success)return reply({error:schedules.error.issues.map(i=>i.message).join(". ")},400);
      if(schedules.data.some(g=>!ids.data.includes(g.id)))return reply({error:"Расписание можно изменить только у выбранной группы"},400);
-     const occupied=new Set([...d.people,...groups,...(d.branches??[]),...d.checks,...d.exams].map(r=>r.id));occupied.add(p.id);occupied.add("settings");occupied.add("initialized");
-     for(const draft of drafts.data){if(occupied.has(draft.id))return reply({error:"Идентификатор новой группы уже используется"},400);occupied.add(draft.id)}
-     const chosen=ids.data.map(id=>groups.find(g=>g.id===id));
-     if(chosen.some(g=>!g||g.branch!==p.branch))return reply({error:"Выберите готовые группы в филиале учителя"},400);
-     const owned=groups.filter(g=>g.teacherId===p.id);
-     if(owned.some(g=>!ids.data.includes(g.id)))return reply({error:"Передайте свою группу другому учителю через настройки группы или его карточку"},400);
-     const selected=(chosen as Group[]).map(g=>({...g,...schedules.data.find(s=>s.id===g.id)}));
-     const created:Group[]=drafts.data.map(g=>({...g,teacherId:p.id,branch:p.branch})),allGroups=[...selected,...created];
-     if(new Set(allGroups.map(g=>`${g.name}\u0000${g.gender}`)).size!==allGroups.length)return reply({error:"Названия групп одного пола у учителя должны различаться"},400);
-     if(p.archived&&allGroups.length)return reply({error:"Сначала передайте группы другому учителю"},400);
-     p.groups=[...new Set(allGroups.map(g=>g.name))].join(", ");
+     const selected=ids.data.map(id=>groups.find(g=>g.id===id));
+     if(selected.some(g=>!g||g.branch!==p.branch))return reply({error:"Выберите готовые группы в филиале учителя"},400);
+     if(p.archived&&selected.length)return reply({error:"Сначала снимите назначенные группы"},400);
+     p.groupAssignments=(selected as Group[]).map(g=>{const schedule=schedules.data.find(a=>a.id===g.id)??p.groupAssignments?.find(a=>a.groupId===g.id)??previous?.groupAssignments?.find(a=>a.groupId===g.id)??teacherGroup(d,g,p.id);return {groupId:g.id,days:schedule.days,startTime:schedule.startTime,endTime:schedule.endTime}});
+     p.groups=[...new Set((selected as Group[]).map(g=>g.name))].join(", ");
      if(p.groups.length>2000)return reply({error:"Выбрано слишком много групп для одной карточки учителя"},400);
-     for(const g of selected){
-      writes.push({kind:"group",value:{...g,teacherId:p.id}});
-      for(const student of d.people.filter(s=>s.kind==="student"&&(s.groupId===g.id||!s.groupId&&s.teacherId===g.teacherId&&s.branch===g.branch&&s.groups===g.name&&s.gender===g.gender)))writes.push({kind:"person",value:{...student,teacherId:p.id,groupId:g.id,groups:g.name}});
-     }
-     for(const g of created)writes.push({kind:"group",value:g});
-     for(const teacherId of new Set(selected.filter(g=>g.teacherId!==p.id).map(g=>g.teacherId))){const previousTeacher=d.people.find(t=>t.id===teacherId)!;writes.push({kind:"person",value:{...previousTeacher,groups:[...new Set(groups.filter(g=>g.teacherId===teacherId&&!ids.data.includes(g.id)).map(g=>g.name))].join(", ")}})}
+     for(const g of groups.filter(g=>g.teacherId===p.id||ids.data.includes(g.id)))if(!d.groups.some(other=>other.id===g.id))writes.push({kind:"group",value:g});
     }
     const assigned=d.people.filter(other=>other.teacherId===p.id&&!other.archived),owned=d.groups.filter(g=>g.teacherId===p.id);
-    if(assigned.some(other=>other.branch!==p.branch||(other.groups&&!p.groups.split(",").map(x=>x.trim()).includes(other.groups)))||owned.some(g=>g.branch!==p.branch||!p.groups.split(",").map(x=>x.trim()).includes(g.name)))return reply({error:"Сначала измените связанные группы и переведите учеников"},400);
+    if(assigned.some(other=>other.branch!==p.branch)||owned.some(g=>g.branch!==p.branch))return reply({error:"Сначала измените связанные группы и переведите учеников"},400);
     if(p.archived&&(assigned.length||owned.length))return reply({error:"Сначала переведите учеников и группы к другому учителю"},400);
    }
   }
@@ -99,11 +90,12 @@ export async function POST(req:Request){
    if(value.assessmentType==="reading"){
     const g=groups.find(g=>g.id===value.groupId),previous=d.checks.find(c=>c.id===value.id);
     const historical=previous?.assessmentType==="reading"&&previous.personId===p.id&&previous.groupId===value.groupId&&previous.teacherId===value.teacherId;
-    if(p.kind!=="student"||!g||(!historical&&(g.teacherId!==value.teacherId||!groupStudents(d,g).some(s=>s.id===p.id))))return reply({error:"Ученик должен входить в выбранную группу"},400);
+    if(p.kind!=="student"||!g||(!historical&&(!(g.teacherId===value.teacherId||teacherHasGroup(d,g,value.teacherId))||!groupStudents(d,g).some(s=>s.id===p.id))))return reply({error:"Ученик должен входить в выбранную группу"},400);
     if(!d.groups.some(other=>other.id===g.id))writes.push({kind:"group",value:g});
    }
   }
   if(kind==="exam"&&"juz"in value&&!d.people.some(p=>p.id===value.teacherId&&p.kind==="teacher"&&!p.archived))return reply({error:"Учитель не найден"},400);
+  if(body.value.lessonTimes!==undefined&&(kind==="group"||kind==="person"&&"kind"in value&&value.kind==="teacher")){const times=lessonTimesSchema.safeParse(body.value.lessonTimes);if(!times.success)return reply({error:times.error.issues.map(i=>i.message).join(". ")},400);writes.push({kind:"settings",value:{id:"settings",...d.settings,lessonTimes:times.data}})}
   writes.push({kind,value});await saveRecords(dataset(req),writes);return reply({ok:true,id:value.id});
  }catch(e){console.error("Save analytics",e);return reply({error:"Не удалось сохранить запись. Ваши поля сохранены в форме; попробуйте ещё раз."},503)}
 }

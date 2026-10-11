@@ -85,49 +85,39 @@ const split=groups.availableGroups(old).filter(g=>g.teacherId===old.people[0].id
 authenticated=false;await post("group",g,401);authenticated=true;await post("group",g,403,"http://wrong.test");
 
 async function verifyOrganization(database){
- const oldTeacher={...teacher,id:"org-old",name:"Первый учитель",groups:"Старая группа"};
- const newTeacher={...teacher,id:"org-new",name:"Новый учитель",groups:""};
- await post("person",oldTeacher);
- await post("person",{...student("org-student","Зайнаб Алиева","female"),teacherId:oldTeacher.id,groups:"Старая группа"});
- let state=await storage.readData("work"),legacy=groups.availableGroups(state).find(g=>g.teacherId===oldTeacher.id&&g.gender==="female");
- assert.ok(legacy);await post("person",{...newTeacher,groupIds:[legacy.id]});
- state=await storage.readData("work");assert.equal(state.groups.find(g=>g.id===legacy.id).teacherId,newTeacher.id);assert.equal(state.people.find(p=>p.id==="org-student").teacherId,newTeacher.id);assert.equal(state.people.find(p=>p.id==="org-student").groupId,legacy.id);assert.equal(state.people.find(p=>p.id===newTeacher.id).groups,"Старая группа");assert.equal(state.people.find(p=>p.id===oldTeacher.id).groups,"");
- await post("person",{...newTeacher,groupIds:[]},400);
- await post("person",{...teacher,id:"org-bad",groupIds:["unknown"]},400);
- await post("person",{...teacher,id:"org-bad",branch:model.branches[1],groupIds:[legacy.id]},400);
- await post("person",{...teacher,id:"org-bad",groupIds:[legacy.id,legacy.id]},400);
- await post("person",{...teacher,id:"org-bad",branch:"Нет филиала"},400);
- const reading={id:"org-reading",personId:"org-student",groupId:legacy.id,teacherId:newTeacher.id,assessmentType:"reading",readingMode:"quran",date:"2026-10-01",makhraj:5,tajweed:6,note:"Сохранить при переносе"};
- await post("check",reading);
- await post("branch",{id:"org-empty",name:"Новый пустой филиал"});
- state=await storage.readData("work");assert.ok(model.branchNames(state).includes("Новый пустой филиал"));
- await post("person",{...teacher,id:"org-empty-teacher",branch:"Новый пустой филиал"});
+ const oldTeacher={...teacher,id:"org-old",name:"Первый учитель",groups:"Старая группа"},newTeacher={...teacher,id:"org-new",name:"Новый учитель",groups:""};
+ await post("person",oldTeacher);await post("person",{...student("org-student","Зайнаб Алиева","female"),teacherId:oldTeacher.id,groups:"Старая группа"});
+ let state=await storage.readData("work"),legacy=groups.availableGroups(state).find(g=>g.teacherId===oldTeacher.id&&g.gender==="female");assert.ok(legacy);
+ await post("person",{...newTeacher,groupIds:[legacy.id]});
+ state=await storage.readData("work");assert.equal(state.groups.find(g=>g.id===legacy.id).teacherId,oldTeacher.id);assert.equal(state.people.find(p=>p.id==="org-student").teacherId,oldTeacher.id);assert.ok(groups.teacherHasGroup(state,legacy,newTeacher.id));assert.ok(groups.teacherHasGroup(state,legacy,oldTeacher.id));assert.equal(groups.availableGroups(state).filter(g=>g.id===legacy.id).length,1);
+ await post("person",{...newTeacher,groupIds:[]});await post("person",{...newTeacher,groupIds:[legacy.id]});
+ await post("person",{...teacher,id:"org-bad",groupIds:["unknown"]},400);await post("person",{...teacher,id:"org-bad",branch:model.branches[1],groupIds:[legacy.id]},400);await post("person",{...teacher,id:"org-bad",groupIds:[legacy.id,legacy.id]},400);
+ const reading={id:"org-reading",personId:"org-student",groupId:legacy.id,teacherId:newTeacher.id,assessmentType:"reading",readingMode:"quran",date:"2026-10-01",makhraj:5,tajweed:6,note:"Сохранить историю"};await post("check",reading);
+ await post("branch",{id:"org-empty",name:"Новый пустой филиал"});await post("person",{...teacher,id:"org-empty-teacher",branch:"Новый пустой филиал"});
  await post("branch",{id:"org-duplicate",name:"новый пустой филиал"},400);
- await post("branch",{id:"org-bad",name:"Некорректный",source:teacher.branch,teacherIds:[]},400);
- await post("branch",{id:"org-bad",name:"Некорректный",source:teacher.branch,teacherIds:["unknown"]},400);
- await post("branch",{id:"org-bad",name:"Некорректный",source:"Нет филиала",teacherIds:[newTeacher.id]},400);
- await post("branch",{id:"org-bad",name:"Некорректный",source:teacher.branch,teacherIds:["org-empty-teacher"]},400);
+ await post("branch",{id:"org-bad",name:"Некорректный",source:teacher.branch,teacherIds:[]},400);await post("branch",{id:"org-bad",name:"Некорректный",source:teacher.branch,teacherIds:["unknown"]},400);await post("branch",{id:"org-bad",name:"Некорректный",source:teacher.branch,teacherIds:["org-empty-teacher"]},400);
+ // A shared group moves with all its teachers so its branch stays consistent.
+ await post("branch",{id:"org-split",name:"Выделенный филиал",source:teacher.branch,teacherIds:[newTeacher.id]},400);
  await database.prepare("CREATE TRIGGER org_failure BEFORE UPDATE ON records WHEN NEW.id = 'work:org-student' BEGIN SELECT RAISE(ABORT, 'organization rollback'); END").run();
  const before=await storage.readData("work"),originalError=console.error;console.error=()=>{};
- try{await post("branch",{id:"org-split",name:"Выделенный филиал",source:teacher.branch,teacherIds:[newTeacher.id]},503)}finally{console.error=originalError}
- assert.deepEqual(await storage.readData("work"),before);
- console.error=()=>{};try{await post("person",{...teacher,id:"org-transfer-failed",groupIds:[legacy.id]},503)}finally{console.error=originalError}
- assert.deepEqual(await storage.readData("work"),before);
- await database.prepare("DROP TRIGGER org_failure").run();
- await post("branch",{id:"org-split",name:"Выделенный филиал",source:teacher.branch,teacherIds:[newTeacher.id]});
- state=await storage.readData("work");assert.equal(state.people.find(p=>p.id===newTeacher.id).branch,"Выделенный филиал");assert.equal(state.people.find(p=>p.id==="org-student").branch,"Выделенный филиал");assert.equal(state.groups.find(g=>g.id===legacy.id).branch,"Выделенный филиал");assert.deepEqual(state.checks.find(c=>c.id===reading.id),reading);assert.equal(state.people.find(p=>p.id===oldTeacher.id).branch,teacher.branch);
- assert.equal(groups.scheduleLabel(state.groups.find(g=>g.id===legacy.id)),"Расписание не задано");assert.equal(model.result(state,state.people.find(p=>p.id===newTeacher.id)),5.5);
- const exported=await backup.exportBackup();assert.equal(exported.version,3);await backup.restoreBackup(exported);
- const sort=rows=>[...rows].sort((a,b)=>a.id.localeCompare(b.id));assert.deepEqual(sort((await backup.exportBackup()).records),sort(exported.records));
- console.log("PASS: searchable-group assignment API, legacy group transfer, new branches, branch split with pupils/groups/history, invalid choices, atomic rollback and version 3 backup round trip.");
+ try{await post("branch",{id:"org-split",name:"Выделенный филиал",source:teacher.branch,teacherIds:[newTeacher.id,oldTeacher.id]},503)}finally{console.error=originalError}
+ assert.deepEqual(await storage.readData("work"),before);await database.prepare("DROP TRIGGER org_failure").run();
+ await post("branch",{id:"org-split",name:"Выделенный филиал",source:teacher.branch,teacherIds:[newTeacher.id,oldTeacher.id]});
+ state=await storage.readData("work");for(const id of [oldTeacher.id,newTeacher.id,"org-student"])assert.equal(state.people.find(p=>p.id===id).branch,"Выделенный филиал");assert.equal(state.groups.find(g=>g.id===legacy.id).branch,"Выделенный филиал");assert.deepEqual(state.checks.find(c=>c.id===reading.id),reading);assert.equal(model.result(state,state.people.find(p=>p.id===newTeacher.id)),5.5);
+ const exported=await backup.exportBackup();await backup.restoreBackup(exported);const sort=rows=>[...rows].sort((a,b)=>a.id.localeCompare(b.id));assert.deepEqual(sort((await backup.exportBackup()).records),sort(exported.records));
+ console.log("PASS: shared legacy group assignments, unchanged roster, multiple teachers, shared-group branch split, atomic rollback and backup round trip.");
 }
 
 async function verifyTeacherCreation(database){
- await verifyTeacherGroups({post,readData:()=>storage.readData("work"),branch:teacher.branch,async failWrites(payload){
-  await database.prepare("CREATE TRIGGER teacher_creation_failure BEFORE INSERT ON records WHEN NEW.id = 'work:schedule-evening' BEGIN SELECT RAISE(ABORT, 'teacher creation rollback'); END").run();
+ await verifyTeacherGroups({post,model,groupHelpers:groups,readData:()=>storage.readData("work"),branch:teacher.branch,async failWrites(payload){
+  await database.prepare("CREATE TRIGGER teacher_creation_failure BEFORE INSERT ON records WHEN NEW.id = 'work:schedule-next-teacher' BEGIN SELECT RAISE(ABORT, 'teacher creation rollback'); END").run();
   const oldError=console.error;console.error=()=>{};
   try{await post("person",payload,503)}finally{console.error=oldError;await database.prepare("DROP TRIGGER teacher_creation_failure").run()}
  }});
+ const canonical=d=>Object.fromEntries(Object.entries(d).map(([key,value])=>[key,Array.isArray(value)?[...value].sort((a,b)=>a.id.localeCompare(b.id)):value]));
+ const before=canonical(await storage.readData("work")),exported=await backup.exportBackup();await backup.restoreBackup(exported);assert.deepEqual(canonical(await storage.readData("work")),before);
+ const invalid=structuredClone(exported),row=invalid.records.find(r=>r.id==="work:schedule-third-teacher");row.value.groupAssignments[0].groupId="missing-group";await assert.rejects(()=>backup.restoreBackup(invalid));assert.deepEqual(canonical(await storage.readData("work")),before);
+
 }
 
 await verifyOrganization(binding);
