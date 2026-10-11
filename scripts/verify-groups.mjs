@@ -5,6 +5,7 @@ import path from "node:path";
 import {createRequire} from "node:module";
 import {DatabaseSync} from "node:sqlite";
 import ts from "typescript";
+import {verifyTeacherGroups} from "./teacher-groups-cases.mjs";
 const nativeRequire=createRequire(import.meta.url),root=process.cwd(),sqlite=new DatabaseSync(":memory:");
 sqlite.exec(fs.readFileSync("drizzle/0000_cloudy_jetstream.sql","utf8"));
 let authenticated=true,failBatch=false;
@@ -121,7 +122,16 @@ async function verifyOrganization(database){
  console.log("PASS: searchable-group assignment API, legacy group transfer, new branches, branch split with pupils/groups/history, invalid choices, atomic rollback and version 3 backup round trip.");
 }
 
+async function verifyTeacherCreation(database){
+ await verifyTeacherGroups({post,readData:()=>storage.readData("work"),branch:teacher.branch,async failWrites(payload){
+  await database.prepare("CREATE TRIGGER teacher_creation_failure BEFORE INSERT ON records WHEN NEW.id = 'work:schedule-evening' BEGIN SELECT RAISE(ABORT, 'teacher creation rollback'); END").run();
+  const oldError=console.error;console.error=()=>{};
+  try{await post("person",payload,503)}finally{console.error=oldError;await database.prepare("DROP TRIGGER teacher_creation_failure").run()}
+ }});
+}
+
 await verifyOrganization(binding);
+await verifyTeacherCreation(binding);
 sqlite.close();console.log("PASS: groups, schedules, gender separation, alphabetical roster, atomic transfers/removal/rollback, two-score readings, group and teacher totals, persistent priority/recheck, validation, legacy groups, and backup round trip.");
 
 if(process.argv.includes("--d1")){
@@ -140,6 +150,7 @@ if(process.argv.includes("--d1")){
   await database.prepare("DROP TRIGGER groups_failure").run();
   const d1Backup=await backup.exportBackup();await backup.restoreBackup(d1Backup);const order=records=>[...records].sort((a,b)=>a.id.localeCompare(b.id));assert.deepEqual(order((await backup.exportBackup()).records),order(d1Backup.records));
   await verifyOrganization(database);
+  await verifyTeacherCreation(database);
   console.log("PASS: real isolated D1 group/reading writes, totals, atomic rollback and backup restoration.");
  }finally{await mf.dispose()}
 }

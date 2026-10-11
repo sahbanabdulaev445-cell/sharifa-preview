@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {createRequire} from "node:module";
 import ts from "typescript";
+import {verifyTeacherGroups} from "./teacher-groups-cases.mjs";
 const nativeRequire=createRequire(import.meta.url),cache=new Map(),saved=new Map();
 let failWrite=false;
 Object.defineProperty(globalThis,"localStorage",{configurable:true,value:{getItem:key=>saved.get(key)??null,setItem(key,value){if(failWrite)throw new Error("Storage quota test");saved.set(key,value)}}});
@@ -34,6 +35,8 @@ await post("branch",{id:"pages-split",name:"Новый филиал",source:teac
 data=await storage.readData("work");assert.equal(data.people.find(p=>p.id==="pages-student").branch,"Новый филиал");assert.equal(data.groups[0].branch,"Новый филиал");assert.equal(data.checks.length,1);
 await post("check",{...data.checks[0],makhraj:11},400);
 assert.equal((await storage.readData("demo")).people.length,104);
+await verifyTeacherGroups({post,readData:()=>storage.readData("work"),branch:teacher.branch,async failWrites(payload){const oldError=console.error;failWrite=true;console.error=()=>{};try{await post("person",payload,503)}finally{failWrite=false;console.error=oldError}}});
+data=await storage.readData("work");
 const response=await backupApi.GET();assert.equal(response.status,200);const exported=await response.json();assert.equal(exported.version,3);
 const restore=await backupApi.POST(new Request("https://preview.test/api/backup",{method:"POST",headers:{Origin:"https://preview.test","Content-Type":"application/json"},body:JSON.stringify(exported)}));assert.equal(restore.status,200);assert.deepEqual(await storage.readData("work"),data);
 const invalid=await backupApi.POST(new Request("https://preview.test/api/backup",{method:"POST",headers:{Origin:"https://preview.test","Content-Type":"application/json"},body:'{"format":"wrong"}'}));assert.equal(invalid.status,400);assert.deepEqual(await storage.readData("work"),data);

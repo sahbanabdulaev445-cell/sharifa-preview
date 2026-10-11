@@ -5,6 +5,8 @@ export const criteria = [{key:"makhraj",label:"Махрадж"},{key:"tajweed",l
 export type Scores = {makhraj:number;tajweed:number;hifz:number;attendance:number};
 export type Person = {id:string;kind:"teacher"|"student";name:string;gender:"male"|"female";branch:string;groups:string;groupId?:string;teacherId?:string;age?:number;level?:string;startDate:string;archived?:boolean};
 export type Group = {id:string;name:string;teacherId:string;branch:string;gender:"male"|"female";days:number[];startTime:string;endTime:string};
+export type TeacherGroupDraft = Omit<Group,"teacherId"|"branch">;
+export type GroupScheduleDraft = Pick<Group,"id"|"days"|"startTime"|"endTime">;
 export const readingModes = [{value:"quran",label:"По Корану"},{value:"memory",label:"Наизусть"}] as const;
 export type Check = {makhraj:number;tajweed:number;hifz?:number;attendance?:number;id:string;personId:string;date:string;note:string;createdAt?:string;assessmentType?:"reading";readingMode?:"quran"|"memory";groupId?:string;teacherId?:string};
 export const checkCriteria = (check:Check) => check.assessmentType==="reading"?criteria.slice(0,2):criteria;

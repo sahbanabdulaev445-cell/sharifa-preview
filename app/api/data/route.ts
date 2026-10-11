@@ -1,5 +1,5 @@
 import {readData,saveRecords} from "@/lib/storage";
-import {recordSchemas as schemas,groupMembersSchema} from "@/lib/record-schemas";
+import {recordSchemas as schemas,groupMembersSchema,newTeacherGroupsSchema,groupSchedulesSchema} from "@/lib/record-schemas";
 import {Group,Person,Branch,branchNames} from "@/lib/analytics";
 import {availableGroups,groupStudents} from "@/lib/groups";
 import {getChatGPTUser} from "@/app/chatgpt-auth";
@@ -63,22 +63,30 @@ export async function POST(req:Request){
     if(p.groupId){const g=groups.find(g=>g.id===p.groupId);if(!g||g.teacherId!==p.teacherId||g.branch!==p.branch||g.gender!==p.gender||g.name!==p.groups)return reply({error:"Выберите группу нужного пола, филиала и учителя"},400);if(!d.groups.some(other=>other.id===g.id))writes.push({kind:"group",value:g})}
     else if(p.groups){if(!t.groups.split(",").map(x=>x.trim()).includes(p.groups))return reply({error:"Группа ученика должна входить в список групп учителя"},400);const explicit=d.groups.find(g=>g.teacherId===p.teacherId&&g.name===p.groups&&g.gender===p.gender);if(explicit)p.groupId=explicit.id}
    }else{
-    if(body.value.groupIds!==undefined){
-     const ids=groupMembersSchema.safeParse(body.value.groupIds);
+    if(body.value.groupIds!==undefined||body.value.newGroups!==undefined||body.value.groupSchedules!==undefined){
+     const ids=groupMembersSchema.safeParse(body.value.groupIds??groups.filter(g=>g.teacherId===p.id).map(g=>g.id));
      if(!ids.success)return reply({error:"Некорректный список групп"},400);
+     const drafts=newTeacherGroupsSchema.safeParse(body.value.newGroups??[]),schedules=groupSchedulesSchema.safeParse(body.value.groupSchedules??[]);
+     if(!drafts.success)return reply({error:drafts.error.issues.map(i=>i.message).join(". ")},400);
+     if(!schedules.success)return reply({error:schedules.error.issues.map(i=>i.message).join(". ")},400);
+     if(schedules.data.some(g=>!ids.data.includes(g.id)))return reply({error:"Расписание можно изменить только у выбранной группы"},400);
+     const occupied=new Set([...d.people,...groups,...(d.branches??[]),...d.checks,...d.exams].map(r=>r.id));occupied.add(p.id);occupied.add("settings");occupied.add("initialized");
+     for(const draft of drafts.data){if(occupied.has(draft.id))return reply({error:"Идентификатор новой группы уже используется"},400);occupied.add(draft.id)}
      const chosen=ids.data.map(id=>groups.find(g=>g.id===id));
      if(chosen.some(g=>!g||g.branch!==p.branch))return reply({error:"Выберите готовые группы в филиале учителя"},400);
      const owned=groups.filter(g=>g.teacherId===p.id);
      if(owned.some(g=>!ids.data.includes(g.id)))return reply({error:"Передайте свою группу другому учителю через настройки группы или его карточку"},400);
-     const selected=chosen as Group[];
-     if(new Set(selected.map(g=>`${g.name}\u0000${g.gender}`)).size!==selected.length)return reply({error:"Названия групп одного пола у учителя должны различаться"},400);
-     if(p.archived&&selected.length)return reply({error:"Сначала передайте группы другому учителю"},400);
-     p.groups=[...new Set(selected.map(g=>g.name))].join(", ");
+     const selected=(chosen as Group[]).map(g=>({...g,...schedules.data.find(s=>s.id===g.id)}));
+     const created:Group[]=drafts.data.map(g=>({...g,teacherId:p.id,branch:p.branch})),allGroups=[...selected,...created];
+     if(new Set(allGroups.map(g=>`${g.name}\u0000${g.gender}`)).size!==allGroups.length)return reply({error:"Названия групп одного пола у учителя должны различаться"},400);
+     if(p.archived&&allGroups.length)return reply({error:"Сначала передайте группы другому учителю"},400);
+     p.groups=[...new Set(allGroups.map(g=>g.name))].join(", ");
      if(p.groups.length>2000)return reply({error:"Выбрано слишком много групп для одной карточки учителя"},400);
      for(const g of selected){
       writes.push({kind:"group",value:{...g,teacherId:p.id}});
       for(const student of d.people.filter(s=>s.kind==="student"&&(s.groupId===g.id||!s.groupId&&s.teacherId===g.teacherId&&s.branch===g.branch&&s.groups===g.name&&s.gender===g.gender)))writes.push({kind:"person",value:{...student,teacherId:p.id,groupId:g.id,groups:g.name}});
      }
+     for(const g of created)writes.push({kind:"group",value:g});
      for(const teacherId of new Set(selected.filter(g=>g.teacherId!==p.id).map(g=>g.teacherId))){const previousTeacher=d.people.find(t=>t.id===teacherId)!;writes.push({kind:"person",value:{...previousTeacher,groups:[...new Set(groups.filter(g=>g.teacherId===teacherId&&!ids.data.includes(g.id)).map(g=>g.name))].join(", ")}})}
     }
     const assigned=d.people.filter(other=>other.teacherId===p.id&&!other.archived),owned=d.groups.filter(g=>g.teacherId===p.id);

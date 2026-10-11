@@ -7,8 +7,12 @@ const score=z.number().min(0).max(10);
 const scores={makhraj:score,tajweed:score,hifz:score,attendance:score};
 const branch=z.string().trim().min(1).max(100);
 const time=z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/,"Укажите время в формате ЧЧ:ММ");
-const groupShape={id,name:z.string().trim().min(1).max(80).refine(v=>!v.includes(","),"Название группы не должно содержать запятую"),teacherId:id,branch,gender:z.enum(["male","female"])};
-const group=z.object({...groupShape,days:z.array(z.number().int().min(0).max(6)).min(1,"Выберите дни занятий").max(7).refine(v=>new Set(v).size===v.length),startTime:time,endTime:time}).refine(g=>g.endTime>g.startTime,"Окончание занятия должно быть позже начала");
+const groupShape={id,name:z.string().trim().min(1,"Введите название группы").max(80,"Название группы — до 80 символов").refine(v=>!v.includes(","),"Название группы не должно содержать запятую"),teacherId:id,branch,gender:z.enum(["male","female"])};
+const scheduleShape={days:z.array(z.number().int().min(0).max(6)).min(1,"Выберите хотя бы один день недели").max(7).refine(v=>new Set(v).size===v.length,"Дни недели не должны повторяться"),startTime:time,endTime:time};
+const group=z.object({...groupShape,...scheduleShape}).refine(g=>g.endTime>g.startTime,"Окончание занятия должно быть позже начала");
+export const teacherGroupDraftSchema=z.object({id,name:groupShape.name,gender:groupShape.gender,...scheduleShape}).refine(g=>g.endTime>g.startTime,"Окончание занятия должно быть позже начала");
+export const newTeacherGroupsSchema=z.array(teacherGroupDraftSchema).max(20,"За один раз можно добавить до 20 новых групп");
+export const groupSchedulesSchema=z.array(z.object({id,...scheduleShape}).refine(g=>g.endTime>g.startTime,"Окончание занятия должно быть позже начала")).max(500).refine(items=>new Set(items.map(g=>g.id)).size===items.length,"Расписание группы повторяется");
 const backupGroup=z.object({...groupShape,days:z.array(z.number().int().min(0).max(6)).max(7),startTime:z.union([time,z.literal("")]),endTime:z.union([time,z.literal("")])}).refine(g=>(!g.days.length&&!g.startTime&&!g.endTime)||(g.days.length>0&&g.startTime!==""&&g.endTime>g.startTime),"Некорректное расписание группы");
 function checkSchema(checkDate:z.ZodType<string>){
  const common={id,personId:id,date:checkDate,createdAt:z.string().datetime().optional(),note:z.string().max(2000)};
