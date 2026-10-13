@@ -22,6 +22,7 @@ jobs:
       - uses: actions/configure-pages@v5
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node scripts/verify-pages-preview.mjs
+      - run: node scripts/verify-rankings.mjs
       - run: node node_modules/vite/bin/vite.js build --config vite.pages.config.ts
       - uses: actions/upload-pages-artifact@v4
         with:
