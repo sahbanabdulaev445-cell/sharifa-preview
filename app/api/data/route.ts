@@ -33,8 +33,8 @@ export async function POST(req:Request){
    const selected=d.people.filter(p=>members.data.includes(p.id)&&p.kind==="teacher"&&!p.archived&&p.branch===b.source);
    if(selected.length!==members.data.length)return reply({error:"Выберите учителей исходного филиала"},400);
    for(const g of groups){const participants=[...new Set([g.teacherId,...groupTeachers(d,g).map(t=>t.id)])];if(participants.some(id=>members.data.includes(id))&&participants.some(id=>!members.data.includes(id)))return reply({error:`Группа «${g.name}» общая. Для переноса в новый филиал выберите всех её преподавателей.`},400)}
-   for(const p of d.people.filter(p=>members.data.includes(p.id)||p.kind==="student"&&members.data.includes(p.teacherId??"")))writes.push({kind:"person",value:{...p,branch:b.name}});
    const movedGroups=new Map([...d.groups,...groups].filter(g=>members.data.includes(g.teacherId)).map(g=>[g.id,g]));
+   for(const p of d.people.filter(p=>members.data.includes(p.id)||p.kind==="student"&&(members.data.includes(p.teacherId??"")||!!p.groupId&&movedGroups.has(p.groupId))))writes.push({kind:"person",value:{...p,branch:b.name}});
    for(const g of movedGroups.values())writes.push({kind:"group",value:{...g,branch:b.name}});
   }
   if(kind==="group"){
@@ -59,12 +59,14 @@ export async function POST(req:Request){
    if(previous&&previous.kind!==p.kind)return reply({error:"Тип существующей карточки нельзя менять"},400);
    if(p.kind==="student"){
     if(p.groupAssignments)return reply({error:"Группы преподавания доступны только учителям"},400);
-    if(!p.teacherId||!p.age||!p.level)return reply({error:"Укажите учителя, возраст и уровень ученика"},400);
+    if((p.birthYear==null&&p.age==null)||!p.level)return reply({error:"Укажите год рождения и уровень ученика"},400);
+    if(p.passport)return reply({error:"Паспортные данные доступны только в карточке учителя"},400);
     const t=d.people.find(other=>other.id===p.teacherId&&other.kind==="teacher"&&!other.archived);
-    if(!t||t.branch!==p.branch)return reply({error:"Учитель должен работать в выбранном филиале"},400);
-    if(p.groupId){const g=groups.find(g=>g.id===p.groupId);if(!g||!(g.teacherId===p.teacherId||teacherHasGroup(d,g,p.teacherId))||g.branch!==p.branch||g.gender!==p.gender||g.name!==p.groups)return reply({error:"Выберите группу нужного пола, филиала и учителя"},400);if(!d.groups.some(other=>other.id===g.id))writes.push({kind:"group",value:g})}
-    else if(p.groups){if(!t.groups.split(",").map(x=>x.trim()).includes(p.groups))return reply({error:"Группа ученика должна входить в список групп учителя"},400);const explicit=d.groups.find(g=>teacherHasGroup(d,g,p.teacherId!)&&g.name===p.groups&&g.gender===p.gender);if(explicit)p.groupId=explicit.id}
+    if(p.teacherId&&(!t||t.branch!==p.branch))return reply({error:"Учитель должен работать в выбранном филиале"},400);
+    if(p.groupId){const g=groups.find(g=>g.id===p.groupId);if(!g||(p.teacherId&&!(g.teacherId===p.teacherId||teacherHasGroup(d,g,p.teacherId)))||g.branch!==p.branch||g.gender!==p.gender||g.name!==p.groups)return reply({error:"Выберите группу нужного пола, филиала и учителя"},400);if(!d.groups.some(other=>other.id===g.id))writes.push({kind:"group",value:g})}
+    else if(p.groups){if(!t||!t.groups.split(",").map(x=>x.trim()).includes(p.groups))return reply({error:"Группа ученика должна входить в список групп учителя"},400);const explicit=d.groups.find(g=>teacherHasGroup(d,g,p.teacherId!)&&g.name===p.groups&&g.gender===p.gender);if(explicit)p.groupId=explicit.id}
    }else{
+    if(!p.startDate)return reply({error:"Укажите дату начала работы учителя"},400);
     if(body.value.newGroups?.length)return reply({error:"Создайте группу отдельно в разделе «Группы и занятия»"},400);
     if(body.value.groupIds!==undefined||body.value.groupSchedules!==undefined||p.groupAssignments!==undefined){
      const ids=groupMembersSchema.safeParse(body.value.groupIds??p.groupAssignments?.map(a=>a.groupId)??groups.filter(g=>teacherHasGroup(d,g,p.id)).map(g=>g.id));

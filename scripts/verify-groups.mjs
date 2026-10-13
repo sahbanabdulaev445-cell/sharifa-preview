@@ -6,6 +6,7 @@ import {createRequire} from "node:module";
 import {DatabaseSync} from "node:sqlite";
 import ts from "typescript";
 import {verifyTeacherGroups} from "./teacher-groups-cases.mjs";
+import {verifyPersonForms} from "./person-forms-cases.mjs";
 const nativeRequire=createRequire(import.meta.url),root=process.cwd(),sqlite=new DatabaseSync(":memory:");
 sqlite.exec(fs.readFileSync("drizzle/0000_cloudy_jetstream.sql","utf8"));
 let authenticated=true,failBatch=false;
@@ -122,6 +123,9 @@ async function verifyTeacherCreation(database){
 
 await verifyOrganization(binding);
 await verifyTeacherCreation(binding);
+await verifyPersonForms({post,readData:()=>storage.readData("work"),model,groupHelpers:groups});
+const formsBackup=await backup.exportBackup();await backup.restoreBackup(formsBackup);
+assert.deepEqual((await backup.exportBackup()).records,formsBackup.records);
 sqlite.close();console.log("PASS: groups, schedules, gender separation, alphabetical roster, atomic transfers/removal/rollback, two-score readings, group and teacher totals, persistent priority/recheck, validation, legacy groups, and backup round trip.");
 
 if(process.argv.includes("--d1")){

@@ -3,7 +3,8 @@ export type Branch = {id:string;name:string;source?:string};
 export const branchNames = (data:Pick<Data,"branches">) => [...new Set([...branches,...(data.branches??[]).map(b=>b.name)])];
 export const criteria = [{key:"makhraj",label:"Махрадж"},{key:"tajweed",label:"Таджвид"},{key:"hifz",label:"Хифз"},{key:"attendance",label:"Посещаемость"}] as const;
 export type Scores = {makhraj:number;tajweed:number;hifz:number;attendance:number};
-export type Person = {id:string;kind:"teacher"|"student";name:string;gender:"male"|"female";branch:string;groups:string;groupAssignments?:TeachingAssignment[];groupId?:string;teacherId?:string;age?:number;level?:string;startDate:string;archived?:boolean};
+export type PassportRF={series?:string;number?:string;issuedBy?:string;issueDate?:string;departmentCode?:string;birthDate?:string;birthPlace?:string;registrationAddress?:string};
+export type Person = {id:string;kind:"teacher"|"student";name:string;gender:"male"|"female";branch:string;groups:string;groupAssignments?:TeachingAssignment[];groupId?:string;teacherId?:string;birthYear?:number;age?:number;level?:string;startDate?:string;passport?:PassportRF;archived?:boolean};
 export type Group = {id:string;name:string;level?:string;teacherId:string;branch:string;gender:"male"|"female";days:number[];startTime:string;endTime:string};
 export const defaultGroupLevels = ["Читающие","Заучивающие","Только перешедшие на Коран"];
 export const groupLevels = (data:Data) => [...new Set([...defaultGroupLevels,...data.groups.map(g=>g.level).filter((v):v is string=>!!v)])];
@@ -21,8 +22,10 @@ export type Data = {people:Person[];groups:Group[];branches?:Branch[];checks:Che
 export const defaults:Settings = {weights:{makhraj:20,tajweed:20,hifz:20,attendance:20,students:20},attention:7,decline:1,examPass:8};
 export const emptyData:Data = {people:[],groups:[],branches:[],checks:[],exams:[],settings:defaults};
 export const num = (v:number|null|undefined) => v==null?"—":v.toLocaleString("ru-RU",{minimumFractionDigits:1,maximumFractionDigits:1});
-export const dateLabel = (v:string) => new Date(v+"T12:00:00").toLocaleDateString("ru-RU");
+export const dateLabel = (v:string|undefined) => v?new Date(v+"T12:00:00").toLocaleDateString("ru-RU"):"—";
 export const today = () => new Intl.DateTimeFormat("sv-SE",{timeZone:"Europe/Moscow"}).format(new Date());
+export function personAge(person:Pick<Person,"birthYear"|"age">,asOf=today()){return person.birthYear!=null?Number(asOf.slice(0,4))-person.birthYear:person.age??null}
+export function ageLabel(person:Pick<Person,"birthYear"|"age">){const age=personAge(person);if(age===null)return "Возраст не указан";const last=age%10,hundred=age%100;return `${age} ${hundred>=11&&hundred<=14?"лет":last===1?"год":last>=2&&last<=4?"года":"лет"}`}
 export function periodBounds(period:string):{start:string;end:string}|null {
  if(period==="all")return null;
  if(period.startsWith("range:")){const [,start,end]=period.split(":");return {start,end}}

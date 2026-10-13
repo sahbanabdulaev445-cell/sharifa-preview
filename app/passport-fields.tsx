@@ -1,0 +1,13 @@
+"use client";
+import {useId} from "react";
+import {Input} from "@/components/ui/input";
+import {Textarea} from "@/components/ui/textarea";
+import {PassportRF,dateLabel,today} from "@/lib/analytics";
+const labels:Record<keyof PassportRF,string>={series:"Серия",number:"Номер",issuedBy:"Кем выдан",issueDate:"Дата выдачи",departmentCode:"Код подразделения",birthDate:"Дата рождения",birthPlace:"Место рождения",registrationAddress:"Адрес регистрации"};
+export default function PassportFields({value,onChange}:{value:PassportRF;onChange:(value:PassportRF)=>void}){
+ const id=useId();
+ function set(key:keyof PassportRF,text:string){if(key==="series"||key==="number")text=text.replace(/\D/g,"");if(key==="departmentCode"){const digits=text.replace(/\D/g,"").slice(0,6);text=digits.length>3?`${digits.slice(0,3)}-${digits.slice(3)}`:digits}onChange({...value,[key]:text})}
+ const field=(key:keyof PassportRF,type="text",props:Record<string,unknown>={})=><div className="form-field" key={key}><label htmlFor={`${id}-${key}`}>{labels[key]}</label><Input id={`${id}-${key}`} type={type} value={value[key]??""} onChange={e=>set(key,e.target.value)} autoComplete="off" {...props}/></div>;
+ return <details className="passport-fields full" onInvalidCapture={e=>{e.currentTarget.open=true}}><summary>Паспорт РФ <span>Необязательно</span></summary><div className="form-grid">{field("series","text",{inputMode:"numeric",maxLength:4,minLength:4,pattern:"[0-9]{4}",placeholder:"4 цифры"})}{field("number","text",{inputMode:"numeric",maxLength:6,minLength:6,pattern:"[0-9]{6}",placeholder:"6 цифр"})}{field("departmentCode","text",{inputMode:"numeric",maxLength:7,pattern:"[0-9]{3}-[0-9]{3}",placeholder:"000-000"})}{field("issueDate","date",{max:today()})}<div className="form-field full"><label htmlFor={`${id}-issuedBy`}>{labels.issuedBy}</label><Textarea id={`${id}-issuedBy`} value={value.issuedBy??""} onChange={e=>set("issuedBy",e.target.value)} maxLength={300}/></div>{field("birthDate","date",{max:today()})}{field("birthPlace","text",{maxLength:300})}<div className="form-field full"><label htmlFor={`${id}-registrationAddress`}>{labels.registrationAddress}</label><Textarea id={`${id}-registrationAddress`} value={value.registrationAddress??""} onChange={e=>set("registrationAddress",e.target.value)} maxLength={1000}/></div></div></details>;
+}
+export function PassportSummary({passport}:{passport:PassportRF}){return <details className="passport-fields"><summary>Паспорт РФ</summary><dl className="passport-summary">{(Object.keys(labels) as (keyof PassportRF)[]).filter(key=>passport[key]).map(key=><div key={key}><dt>{labels[key]}</dt><dd>{key==="issueDate"||key==="birthDate"?dateLabel(passport[key]):passport[key]}</dd></div>)}</dl></details>}
