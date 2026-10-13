@@ -13,7 +13,7 @@ export type Backup=z.infer<typeof backupSchema>;
 
 export function validateBackup(input:unknown):Backup {
  const parsed=backupSchema.safeParse(input);
- if(!parsed.success)throw new Error("Файл не является резервной копией «Аналитики директора» поддерживаемой версии.");
+ if(!parsed.success)throw new Error("Файл не является резервной копией «Аналитики руководства» поддерживаемой версии.");
  const backup=parsed.data,ids=new Set<string>();
  const people=new Map<string,Record<string,unknown>>(),groups=new Map<string,Record<string,unknown>>();
  const branchSets={demo:new Set(branches.map(b=>b.toLocaleLowerCase("ru"))),work:new Set(branches.map(b=>b.toLocaleLowerCase("ru")))};

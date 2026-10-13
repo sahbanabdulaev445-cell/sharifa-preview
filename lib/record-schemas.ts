@@ -7,7 +7,7 @@ const score=z.number().min(0).max(10);
 const scores={makhraj:score,tajweed:score,hifz:score,attendance:score};
 const branch=z.string().trim().min(1).max(100);
 const time=z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/,"Укажите время в формате ЧЧ:ММ");
-const groupShape={id,name:z.string().trim().min(1,"Введите название группы").max(80,"Название группы — до 80 символов").refine(v=>!v.includes(","),"Название группы не должно содержать запятую"),teacherId:id,branch,gender:z.enum(["male","female"])};
+const groupShape={id,name:z.string().trim().min(1,"Введите название группы").max(80,"Название группы — до 80 символов").refine(v=>!v.includes(","),"Название группы не должно содержать запятую"),level:z.string().trim().min(1).max(80).optional(),teacherId:id,branch,gender:z.enum(["male","female"])};
 const scheduleShape={days:z.array(z.number().int().min(0).max(6)).min(1,"Выберите хотя бы один день недели").max(7).refine(v=>new Set(v).size===v.length,"Дни недели не должны повторяться"),startTime:time,endTime:time};
 const group=z.object({...groupShape,...scheduleShape}).refine(g=>g.endTime>g.startTime,"Окончание занятия должно быть позже начала");
 export const lessonTimesSchema=z.array(z.object({startTime:time,endTime:time}).refine(g=>g.endTime>g.startTime,"Окончание занятия должно быть позже начала")).max(24,"Можно сохранить до 24 вариантов времени").refine(items=>new Set(items.map(g=>`${g.startTime}-${g.endTime}`)).size===items.length,"Этот вариант времени уже есть");
@@ -17,7 +17,7 @@ const backupGroup=z.object({...groupShape,days:z.array(z.number().int().min(0).m
 function checkSchema(checkDate:z.ZodType<string>){
  const common={id,personId:id,date:checkDate,createdAt:z.string().datetime().optional(),note:z.string().max(2000)};
  const readingScore=z.number().min(1,"Оценка должна быть от 1 до 10").max(10,"Оценка должна быть от 1 до 10");
- return z.union([z.object({...common,...scores,assessmentType:z.undefined()}),z.object({...common,assessmentType:z.literal("reading"),groupId:id,teacherId:id,readingMode:z.enum(["quran","memory"]),makhraj:readingScore,tajweed:readingScore})]);
+ return z.union([z.object({...common,...scores,assessmentType:z.undefined()}),z.object({...common,assessmentType:z.literal("reading"),groupId:id,teacherId:id,readingMode:z.enum(["quran","memory"]),makhraj:readingScore,tajweed:readingScore,hifz:readingScore.optional()})]);
 }
 export const recordSchemas={
  branch:z.object({id,name:branch,source:branch.optional()}),

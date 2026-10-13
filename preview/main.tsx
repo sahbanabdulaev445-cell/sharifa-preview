@@ -15,4 +15,4 @@ configurePreviewTransport(async (url,init)=>{
  return Response.json({error:"Страница не найдена"},{status:404});
 });
 
-createRoot(document.getElementById("root")!).render(<StrictMode><div className="github-preview-notice" role="note"><b>Проверочная версия Sharifa</b><span>Данные сохраняются в этом браузере. Вход через GPT не нужен.</span></div><Dashboard/></StrictMode>);
+createRoot(document.getElementById("root")!).render(<StrictMode><Dashboard/></StrictMode>);

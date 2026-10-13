@@ -4,7 +4,9 @@ export const branchNames = (data:Pick<Data,"branches">) => [...new Set([...branc
 export const criteria = [{key:"makhraj",label:"Махрадж"},{key:"tajweed",label:"Таджвид"},{key:"hifz",label:"Хифз"},{key:"attendance",label:"Посещаемость"}] as const;
 export type Scores = {makhraj:number;tajweed:number;hifz:number;attendance:number};
 export type Person = {id:string;kind:"teacher"|"student";name:string;gender:"male"|"female";branch:string;groups:string;groupAssignments?:TeachingAssignment[];groupId?:string;teacherId?:string;age?:number;level?:string;startDate:string;archived?:boolean};
-export type Group = {id:string;name:string;teacherId:string;branch:string;gender:"male"|"female";days:number[];startTime:string;endTime:string};
+export type Group = {id:string;name:string;level?:string;teacherId:string;branch:string;gender:"male"|"female";days:number[];startTime:string;endTime:string};
+export const defaultGroupLevels = ["Читающие","Заучивающие","Только перешедшие на Коран"];
+export const groupLevels = (data:Data) => [...new Set([...defaultGroupLevels,...data.groups.map(g=>g.level).filter((v):v is string=>!!v)])];
 export type LessonTime = {startTime:string;endTime:string};
 export type TeachingAssignment = LessonTime & {groupId:string;days:number[]};
 export const defaultLessonTimes:LessonTime[] = ["09:00","10:00","11:00","14:00","16:00","18:00"].map(startTime=>({startTime,endTime:`${String(Number(startTime.slice(0,2))+1).padStart(2,"0")}:00`}));
@@ -12,7 +14,7 @@ export function teachesGroup(teacher:Person,group:Group){return teacher.groupAss
 export type GroupScheduleDraft = Pick<Group,"id"|"days"|"startTime"|"endTime">;
 export const readingModes = [{value:"quran",label:"По Корану"},{value:"memory",label:"Наизусть"}] as const;
 export type Check = {makhraj:number;tajweed:number;hifz?:number;attendance?:number;id:string;personId:string;date:string;note:string;createdAt?:string;assessmentType?:"reading";readingMode?:"quran"|"memory";groupId?:string;teacherId?:string};
-export const checkCriteria = (check:Check) => check.assessmentType==="reading"?criteria.slice(0,2):criteria;
+export const checkCriteria = (check:Check) => check.assessmentType==="reading"?criteria.slice(0,check.hifz==null?2:3):criteria;
 export type Exam = Scores & {id:string;teacherId:string;date:string;juz:number;note:string;createdAt?:string};
 export type Settings = {weights:Scores & {students:number};attention:number;decline:number;examPass:number;lessonTimes?:LessonTime[]};
 export type Data = {people:Person[];groups:Group[];branches?:Branch[];checks:Check[];exams:Exam[];settings:Settings};
@@ -39,13 +41,22 @@ export function chartMonths(data:Data,period:string){
  return months;
 }
 export const avg = (values:(number|null)[]) => {const clean=values.filter((v):v is number=>v!==null);return clean.length?clean.reduce((a,b)=>a+b,0)/clean.length:null};
-export function weighted(s:Pick<Check,"makhraj"|"tajweed"|"hifz"|"attendance"|"assessmentType">,w:Settings["weights"],studentResult?:number|null) {if(s.assessmentType==="reading")return (s.makhraj+s.tajweed)/2;let total=0,weight=0;for(const c of criteria){const score=s[c.key];if(score!=null){total+=score*w[c.key];weight+=w[c.key]}}if(studentResult!=null){total+=studentResult*w.students;weight+=w.students}return weight?total/weight:null}
+export function weighted(s:Pick<Check,"makhraj"|"tajweed"|"hifz"|"attendance"|"assessmentType">,w:Settings["weights"],studentResult?:number|null) {if(s.assessmentType==="reading")return (s.makhraj+s.tajweed+(s.hifz??0))/(s.hifz==null?2:3);let total=0,weight=0;for(const c of criteria){const score=s[c.key];if(score!=null){total+=score*w[c.key];weight+=w[c.key]}}if(studentResult!=null){total+=studentResult*w.students;weight+=w.students}return weight?total/weight:null}
+export function previousCheck(data:Data,current:Check){return data.checks.filter(c=>c.personId===current.personId&&c.id!==current.id&&c.assessmentType===current.assessmentType&&compareChecks(c,current)>0).sort(compareChecks)[0]??null}
+export function checkProgress(data:Data,current:Check){
+ const previous=previousCheck(data,current);
+ const metrics=checkCriteria(current).map(c=>({...c,value:current[c.key]!,before:previous?.[c.key]??null,change:previous?.[c.key]==null?null:current[c.key]!-previous[c.key]!}));
+ const best=Math.max(...metrics.map(c=>c.value));
+ const sameCriteria=previous&&checkCriteria(current).map(c=>c.key).join()===checkCriteria(previous).map(c=>c.key).join();
+ const score=weighted(current,data.settings.weights),before=previous?weighted(previous,data.settings.weights):null;
+ return {previous,metrics,score,before,totalChange:sameCriteria&&score!=null&&before!=null?score-before:null,strongest:metrics.filter(c=>c.value===best),needsWork:metrics.filter(c=>c.value<data.settings.attention)};
+}
 export function latest(data:Data,id:string,month="all") {return data.checks.filter(c=>c.personId===id&&inPeriod(c.date,month)).sort(compareChecks)[0]??null}
 export function result(data:Data,p:Person,month="all"):number|null {const check=latest(data,p.id,month);const sr=p.kind==="teacher"?avg(studentsOf(data,p.id).map(s=>{const c=latest(data,s.id,month);return c?weighted(c,data.settings.weights):null})):null;if(!check)return sr;return weighted(check,data.settings.weights,sr)}
 export function previousMonth(month:string) {const d=new Date(month+"-15T12:00:00");d.setMonth(d.getMonth()-1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`}
-export function delta(data:Data,p:Person,month="all") {const c=latest(data,p.id,month);if(!c)return null;const currentMonth=c.date.slice(0,7);const now=result(data,p,month==="all"?currentMonth:month),before=result(data,p,previousMonth(currentMonth));return now!=null&&before!=null?now-before:null}
+export function delta(data:Data,p:Person,month="all") {const c=latest(data,p.id,month);if(!c)return null;if(p.kind==="student")return checkProgress(data,c).totalChange;const currentMonth=c.date.slice(0,7);const now=result(data,p,month==="all"?currentMonth:month),before=result(data,p,previousMonth(currentMonth));return now!=null&&before!=null?now-before:null}
 export function studentsOf(data:Data,id:string) {const teacher=data.people.find(p=>p.id===id);if(!teacher)return [];return data.people.filter(p=>{if(p.kind!=="student"||p.archived)return false;const group=data.groups.find(g=>p.groupId?g.id===p.groupId:g.teacherId===p.teacherId&&g.branch===p.branch&&g.name===p.groups&&g.gender===p.gender);return group?teachesGroup(teacher,group):p.teacherId===id})}
-export function alerts(data:Data,p:Person,month="all") {const c=latest(data,p.id,month);if(!c)return [];const out:string[]=[];for(const k of checkCriteria(c)){const score=c[k.key];if(score==null)continue;if(score<data.settings.attention)out.push(`${k.label}: ${num(score)}. ${p.kind==="teacher"?"Требуется проверка группы":"Рекомендуется повторная проверка"}.`);const prev=latest(data,p.id,previousMonth(c.date.slice(0,7))),before=prev?.[k.key];if(before!=null&&before-score>=data.settings.decline)out.push(`${k.label}: снижение на ${num(before-score)} балла за месяц.`)}const r=result(data,p,month);if(!out.length&&r!=null&&r<data.settings.attention)out.push(`Итог ${num(r)} ниже порога ${num(data.settings.attention)}. Рекомендуется проверка.`);return out}
+export function alerts(data:Data,p:Person,month="all") {const c=latest(data,p.id,month);if(!c)return [];const out:string[]=[];for(const k of checkCriteria(c)){const score=c[k.key];if(score==null)continue;if(score<data.settings.attention)out.push(`${k.label}: ${num(score)}. ${p.kind==="teacher"?"Требуется проверка группы":"Рекомендуется повторная проверка"}.`);const prev=p.kind==="student"?previousCheck(data,c):latest(data,p.id,previousMonth(c.date.slice(0,7))),before=prev?.[k.key];if(before!=null&&before-score>=data.settings.decline)out.push(`${k.label}: снижение на ${num(before-score)} балла ${p.kind==="student"?"с прошлой проверки":"за месяц"}.`)}const r=result(data,p,month);if(!out.length&&r!=null&&r<data.settings.attention)out.push(`Итог ${num(r)} ниже порога ${num(data.settings.attention)}. Рекомендуется проверка.`);return out}
 export function demoData():Data {
  const people:Person[]=[],checks:Check[]=[],exams:Exam[]=[];
  const names=["Ахмад Абдуллаев","Мухаммад Магомедов","Фатима Ибрагимова","Аиша Алиева","Умар Гаджиев","Марьям Сулейманова","Али Юсупов","Хадиджа Расулова"];

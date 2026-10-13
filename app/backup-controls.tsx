@@ -19,7 +19,7 @@ export default function BackupControls({onRestored}:{onRestored:()=>void}){
    const r=await appRequest("/api/backup",{cache:"no-store"});
    if(!r.ok){const d=await r.json() as {error?:string};throw new Error(d.error??"Не удалось экспортировать данные.")}
    const blob=await r.blob(),url=URL.createObjectURL(blob),link=document.createElement("a");
-   link.href=url;link.download=`Аналитика-директора-${today()}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+   link.href=url;link.download=`Аналитика-руководства-${today()}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
    toast.success("Резервная копия подготовлена для скачивания");
   }catch(e){setError(e instanceof Error?e.message:"Не удалось экспортировать данные.")}finally{setBusy(null)}
  }
