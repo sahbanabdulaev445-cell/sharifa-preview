@@ -32,7 +32,7 @@ export async function verifyPersonForms({post,readData,model,groupHelpers,prefer
   const restored=preferences.studentInitialValues(data,"work");
   for(const field of ["gender","branch","teacherId","groupId","groups","birthYear","level"])assert.equal(restored[field],values[field]);
   for(const field of ["name","passport","startDate"])assert.equal(restored[field],undefined);
-  assert.equal(preferences.studentInitialValues(data,"demo").birthYear,"");
+  assert.equal(preferences.studentInitialValues(data,"demo").birthYear,"2018");
   const overridden=preferences.studentInitialValues(data,"work",{branch,gender:"female"});assert.equal(overridden.branch,branch);assert.equal(overridden.gender,"female");assert.equal(overridden.teacherId,"");assert.equal(overridden.groupId,"");
   preferences.rememberStudentValues({...values,teacherId:"",groupId:"",groups:""},"work");assert.equal(preferences.studentInitialValues(data,"work").teacherId,"");assert.equal(preferences.studentInitialValues(data,"work").groupId,"");
  }

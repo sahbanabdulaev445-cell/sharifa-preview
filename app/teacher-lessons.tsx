@@ -20,7 +20,7 @@ function ScoreBar({label,value,tone="blue"}:{label:string;value:number|null|unde
 
 export function TeacherLessonList({data,teachers,groups,period,search,expandedId,onSelect,onDetail,onGroup,onAssess}:Props){
  const shown=teachers.filter(t=>`${t.name} ${groups.filter(g=>teacherHasGroup(data,g,t.id)).map(g=>g.name).join(" ")}`.toLocaleLowerCase("ru").includes(search.toLocaleLowerCase("ru")));
- return <div className="teacher-explorer"><div className="lesson-section-title"><div><span className="lesson-overline">КОМАНДА ПРЕПОДАВАТЕЛЕЙ</span><h2>Всё об учителе — в одной карточке</h2><p>Нажмите на карточку, чтобы раскрыть группы, расписание и результаты.</p></div><span className="lesson-total">{shown.length} учителей</span></div>
+ return <div className="teacher-explorer"><div className="lesson-section-title"><div><h2>Учителя</h2></div><span className="lesson-total">{shown.length} учителей</span></div>
  <div className="teacher-stack">{shown.map((t,index)=>{
   const own=groups.filter(g=>teacherHasGroup(data,g,t.id)).map(g=>teacherGroup(data,g,t.id)),pupils=studentsOf(data,t.id),priority=new Set(own.flatMap(g=>priorityStudents(data,g).map(p=>p.id))),checks=pupils.map(p=>latest(data,p.id,period)).filter(c=>c!==null),open=t.id===expandedId;
   return <article className={`teacher-fold ${open?"is-open":""}`} key={t.id}><h3 className="teacher-fold-heading"><button className="teacher-fold-trigger" type="button" aria-expanded={open} aria-controls={`teacher-lessons-${t.id}`} onClick={()=>onSelect(t)}>

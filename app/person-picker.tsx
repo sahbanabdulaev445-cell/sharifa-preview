@@ -1,0 +1,23 @@
+"use client";
+import {useId,useRef,useState} from "react";
+import {Check,Search,Users,GraduationCap,X} from "lucide-react";
+import {Data,branchNames,Person} from "@/lib/analytics";
+import {searchPeople} from "@/lib/person-search";
+import {Input} from "@/components/ui/input";
+import {Picker,Avatar} from "./analytics";
+import RequiredMark from "./required-mark";
+import "./management.css";
+export default function PersonPicker({data,value,onChange,onlyTeachers=false}:{data:Data;value:string;onChange:(id:string)=>void;onlyTeachers?:boolean}){
+ const selected=data.people.find(p=>p.id===value),id=useId(),input=useRef<HTMLInputElement>(null);
+ const [kind,setKind]=useState<Person["kind"]>(onlyTeachers?"teacher":selected?.kind??"student"),[branch,setBranch]=useState(selected?.branch??"all"),[teacher,setTeacher]=useState("all"),[query,setQuery]=useState(""),[open,setOpen]=useState(!selected),[active,setActive]=useState(-1);
+ const teachers=data.people.filter(p=>p.kind==="teacher"&&!p.archived&&(branch==="all"||p.branch===branch)).sort((a,b)=>a.name.localeCompare(b.name,"ru"));
+ const matches=searchPeople(data,{kind,branch,teacherId:teacher,query}),shown=matches.slice(0,12);
+ function choose(person:Person){onChange(person.id);setQuery("");setOpen(false);setActive(-1)}
+ function reset(){onChange("");setOpen(true);setActive(-1)}
+ return <section className="person-finder full" aria-label="Выбор человека для проверки"><div className="person-finder-heading"><label htmlFor={`${id}-search`}>Кого проверяем<RequiredMark/></label>{!onlyTeachers&&<div className="person-kind" role="group" aria-label="Кого искать">{[{value:"student" as const,label:"Ученики",Icon:GraduationCap},{value:"teacher" as const,label:"Учителя",Icon:Users}].map(item=><button type="button" key={item.value} aria-pressed={kind===item.value} onClick={()=>{setKind(item.value);setTeacher("all");setQuery("");reset()}}><item.Icon size={15} aria-hidden/>{item.label}</button>)}</div>}</div>
+ <div className="person-finder-filters"><div><span>Филиал</span><Picker label="Филиал для поиска человека" value={branch} onChange={next=>{setBranch(next);setTeacher("all");reset()}} items={[{value:"all",label:"Все филиалы"},...branchNames(data).map(name=>({value:name,label:name}))]}/></div>{kind==="student"&&<div><span>Учитель</span><Picker label="Учитель для поиска ученика" value={teacher} onChange={next=>{setTeacher(next);reset()}} items={[{value:"all",label:"Все учителя"},...teachers.map(p=>({value:p.id,label:p.name}))]}/></div>}</div>
+ <div className="person-finder-search"><Search size={17} aria-hidden/><Input ref={input} id={`${id}-search`} role="combobox" aria-autocomplete="list" aria-expanded={open} aria-controls={`${id}-results`} aria-activedescendant={open&&active>=0&&shown[active]?`${id}-${shown[active].id}`:undefined} value={query} placeholder={kind==="student"?"Начните вводить имя ученика":"Начните вводить имя учителя"} onFocus={()=>setOpen(true)} onBlur={()=>setOpen(false)} onChange={e=>{setQuery(e.target.value);onChange("");setOpen(true);setActive(-1)}} onKeyDown={e=>{if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();setOpen(true);setActive(index=>Math.max(0,Math.min(shown.length-1,index+(e.key==="ArrowDown"?1:-1))))}else if(e.key==="Enter"&&open){e.preventDefault();const person=shown[active]??(shown.length===1?shown[0]:undefined);if(person)choose(person)}else if(e.key==="Escape"&&open){e.preventDefault();e.stopPropagation();setOpen(false)}}}/></div>
+ {open&&<div className="person-suggestions"><div role="listbox" id={`${id}-results`} aria-label="Подсказки по имени">{shown.map((p,index)=><button type="button" role="option" id={`${id}-${p.id}`} aria-selected={p.id===value||index===active} tabIndex={-1} key={p.id} onMouseDown={e=>e.preventDefault()} onClick={()=>choose(p)}><Avatar person={p}/><span><b>{p.name}</b><small>{p.branch}{p.groups?` · ${p.groups}`:" · Без группы"}</small></span>{p.id===value&&<Check size={17} aria-hidden/>}</button>)}</div>{!matches.length?<p role="status">Никого не найдено. Измените имя или фильтры.</p>:matches.length>shown.length?<p>Показаны первые {shown.length} из {matches.length}. Уточните имя или выберите фильтры.</p>:<p>{matches.length} найдено</p>}</div>}
+ {selected&&!open&&<div className="person-selected"><Avatar person={selected}/><div><b>{selected.name}</b><small>{selected.kind==="student"?"Ученик":"Учитель"} · {selected.branch}{selected.groups?` · ${selected.groups}`:""}</small></div><button type="button" aria-label="Выбрать другого человека" onClick={()=>{reset();input.current?.focus()}}><X size={17}/></button></div>}
+ </section>;
+}

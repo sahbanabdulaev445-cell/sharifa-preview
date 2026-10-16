@@ -1,6 +1,8 @@
 export const branches = ["Гамидова", "Акушинского", "Каспийск", "Петра Первого"];
-export type Branch = {id:string;name:string;source?:string};
-export const branchNames = (data:Pick<Data,"branches">) => [...new Set([...branches,...(data.branches??[]).map(b=>b.name)])];
+export type Branch = {id:string;name:string;source?:string;replaces?:string;archived?:boolean;address?:string;phone?:string;note?:string};
+export const defaultBranchId=(name:string)=>`branch-default-${branches.indexOf(name)+1}`;
+export function branchEntries(data:Pick<Data,"branches">):Branch[]{const saved=data.branches??[];return [...branches.map(name=>saved.find(b=>b.replaces===name)??{id:defaultBranchId(name),name}),...saved.filter(b=>!b.replaces)]}
+export const branchNames = (data:Pick<Data,"branches">) => [...new Set(branchEntries(data).filter(b=>!b.archived).map(b=>b.name))];
 export const criteria = [{key:"makhraj",label:"Махрадж"},{key:"tajweed",label:"Таджвид"},{key:"hifz",label:"Хифз"},{key:"attendance",label:"Посещаемость"}] as const;
 export type Scores = {makhraj:number;tajweed:number;hifz:number;attendance:number};
 export type PassportRF={series?:string;number?:string;issuedBy?:string;issueDate?:string;departmentCode?:string;birthDate?:string;birthPlace?:string;registrationAddress?:string};

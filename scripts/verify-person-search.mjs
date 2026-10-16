@@ -1,0 +1,20 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import {createRequire} from "node:module";
+import ts from "typescript";
+const nativeRequire=createRequire(import.meta.url),cache=new Map();
+function load(file){const filename=path.resolve(file);if(cache.has(filename))return cache.get(filename).exports;const module={exports:{}};cache.set(filename,module);const code=ts.transpileModule(fs.readFileSync(filename,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;const require=name=>name.startsWith(".")?load(path.resolve(path.dirname(filename),name)+".ts"):nativeRequire(name);new Function("require","module","exports",code)(require,module,module.exports);return module.exports}
+const {searchPeople,stepBirthYear}=load("lib/person-search.ts"),{emptyData}=load("lib/analytics.ts");
+assert.equal(stepBirthYear("",1),2018);assert.equal(stepBirthYear("",-1),2018);assert.equal(stepBirthYear("2018",1),2019);assert.equal(stepBirthYear("2018",-1),2017);assert.equal(stepBirthYear("1900",-1),1900);assert.equal(stepBirthYear("2026",1,2026),2026);
+const data=structuredClone(emptyData),teacher={id:"t1",kind:"teacher",name:"Учитель один",gender:"male",branch:"Первый",groups:""},other={...teacher,id:"t2",name:"Учитель два",branch:"Второй"};
+const group={id:"g1",name:"Чтение",teacherId:teacher.id,branch:"Первый",gender:"male",days:[],startTime:"",endTime:""};
+data.groups=[group];data.people=[teacher,other,{id:"s1",kind:"student",name:"Али Ёлкин",gender:"male",branch:"Первый",groups:group.name,groupId:group.id},{id:"s2",kind:"student",name:"Али Магомедов",gender:"male",branch:"Второй",teacherId:other.id,groups:""},{id:"s3",kind:"student",name:"Зейнаб Ёлкина",gender:"female",branch:"Первый",groups:""},{id:"s4",kind:"student",name:"Али Ёлкин",gender:"male",branch:"Первый",groups:"",archived:true}];
+const filters={kind:"student",branch:"all",teacherId:"all",query:""};
+assert.equal(searchPeople(data,filters).length,3);
+assert.deepEqual(searchPeople(data,{...filters,query:"  ЕЛК  али "}).map(p=>p.id),["s1"]);
+assert.deepEqual(searchPeople(data,{...filters,branch:"Второй",query:"али"}).map(p=>p.id),["s2"]);
+assert.deepEqual(searchPeople(data,{...filters,teacherId:teacher.id}).map(p=>p.id),["s1"],"Teacher filtering includes pupils assigned through a group");
+assert.equal(searchPeople(data,{...filters,kind:"teacher"}).length,2);
+assert.equal(searchPeople(data,{...filters,query:"не существует"}).length,0);
+console.log("PASS: birth-year arrows start at 2018, stepping bounds, name suggestions, case/ё/word matching, branch/teacher filters, group membership and archived-person exclusion.");

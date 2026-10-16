@@ -1,7 +1,8 @@
 import {readData,saveRecords} from "@/lib/storage";
 import {recordSchemas as schemas,groupMembersSchema,groupSchedulesSchema,lessonTimesSchema} from "@/lib/record-schemas";
-import {Group,Person,Branch,branchNames} from "@/lib/analytics";
+import {Group,Person,Branch,branchNames,branchEntries} from "@/lib/analytics";
 import {availableGroups,groupStudents,teacherHasGroup,teacherGroup,groupTeachers} from "@/lib/groups";
+import {planBranchAction,BranchAction} from "@/lib/branches";
 import {getChatGPTUser} from "@/app/chatgpt-auth";
 export const dynamic="force-dynamic";
 
@@ -18,12 +19,14 @@ export async function POST(req:Request){
   const kind=body.kind as keyof typeof schemas,parsed=schemas[kind].safeParse(body.value);
   if(!parsed.success)return reply({error:parsed.error.issues.map(i=>i.message).join(". ")},400);
   const value=parsed.data,d=await readData(dataset(req)),groups=availableGroups(d);
-  const existing=[...d.people.map(p=>({kind:"person",id:p.id})),...groups.map(g=>({kind:"group",id:g.id})),...(d.branches??[]).map(b=>({kind:"branch",id:b.id})),...d.checks.map(c=>({kind:"check",id:c.id})),...d.exams.map(e=>({kind:"exam",id:e.id})),{kind:"settings",id:"settings"},{kind:"marker",id:"initialized"}].find(r=>r.id===value.id);
+  if(kind==="branch-action"){let changes;try{changes=planBranchAction(d,value as BranchAction)}catch(error){return reply({error:error instanceof Error?error.message:"Не удалось изменить филиал"},400)}await saveRecords(dataset(req),changes);return reply({ok:true,id:value.id})}
+  const existing=[...d.people.map(p=>({kind:"person",id:p.id})),...groups.map(g=>({kind:"group",id:g.id})),...branchEntries(d).map(b=>({kind:"branch",id:b.id})),...d.checks.map(c=>({kind:"check",id:c.id})),...d.exams.map(e=>({kind:"exam",id:e.id})),{kind:"settings",id:"settings"},{kind:"marker",id:"initialized"}].find(r=>r.id===value.id);
   if(existing&&existing.kind!==kind)return reply({error:"Этот идентификатор уже занят другой записью"},400);
   const writes:{kind:string;value:{id:string;[key:string]:unknown}}[]=[];
   if((kind==="person"||kind==="group")&&"branch"in value&&!branchNames(d).includes(value.branch))return reply({error:"Сначала создайте этот филиал в разделе «Филиалы»"},400);
   if(kind==="branch"){
    const b=value as Branch;
+   if(b.replaces||b.archived)return reply({error:"Используйте действия редактирования филиала"},400);
    if(existing)return reply({error:"Для изменения структуры создайте новый филиал или разделите существующий"},400);
    if(branchNames(d).some(name=>name.toLocaleLowerCase("ru")===b.name.toLocaleLowerCase("ru")))return reply({error:"Филиал с таким названием уже существует"},400);
    const members=groupMembersSchema.safeParse(body.value.teacherIds??[]);

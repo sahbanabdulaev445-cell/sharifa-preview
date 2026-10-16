@@ -7,7 +7,7 @@ const key=(scope:string)=>`sharifa-student-defaults-v1:${scope==="demo"?"demo":"
 const yearsKey="sharifa-birth-years-v1";
 export const defaultBirthYears=Array.from({length:9},(_,i)=>2012+i);
 export function studentInitialValues(data:Data,scope:string,context:Partial<Person>={}):Record<string,string>{
- const values:Record<string,string>={gender:"male",branch:branchNames(data)[0],teacherId:"",groupId:"",groups:"",birthYear:"",level:"Начальный"};
+ const values:Record<string,string>={gender:"male",branch:branchNames(data)[0]??"",teacherId:"",groupId:"",groups:"",birthYear:"2018",level:"Начальный"};
  try{const saved=JSON.parse(localStorage.getItem(key(scope))??"{}");for(const field of fields)if(typeof saved?.[field]==="string")values[field]=saved[field]}catch{}
  for(const field of fields)if(context[field]!=null)values[field]=String(context[field]);
  if(!["male","female"].includes(values.gender))values.gender="male";

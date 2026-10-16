@@ -1,6 +1,6 @@
 import {z} from "zod";
 import {backupRecordSchemas} from "./record-schemas";
-import {branches} from "./analytics";
+import {branches,defaultBranchId} from "./analytics";
 
 export const MAX_BACKUP_BYTES=10*1024*1024;
 export const backupSchema=z.object({
@@ -16,7 +16,9 @@ export function validateBackup(input:unknown):Backup {
  if(!parsed.success)throw new Error("Файл не является резервной копией «Аналитики руководства» поддерживаемой версии.");
  const backup=parsed.data,ids=new Set<string>();
  const people=new Map<string,Record<string,unknown>>(),groups=new Map<string,Record<string,unknown>>();
- const branchSets={demo:new Set(branches.map(b=>b.toLocaleLowerCase("ru"))),work:new Set(branches.map(b=>b.toLocaleLowerCase("ru")))};
+ const replaced={demo:new Set<string>(),work:new Set<string>()};
+ for(const row of backup.records.filter(r=>r.kind==="branch"&&r.value.replaces)){const name=String(row.value.replaces);if(!branches.includes(name)||replaced[row.dataset].has(name)||row.value.id!==defaultBranchId(name))throw new Error("Некорректная запись исходного филиала.");replaced[row.dataset].add(name)}
+ const branchSets={demo:new Set(branches.filter(b=>!replaced.demo.has(b)).map(b=>b.toLocaleLowerCase("ru"))),work:new Set(branches.filter(b=>!replaced.work.has(b)).map(b=>b.toLocaleLowerCase("ru")))};
  for(const row of backup.records){
   if(ids.has(row.id))throw new Error("В файле повторяются записи. Выберите исходную резервную копию.");
   ids.add(row.id);
@@ -34,10 +36,10 @@ export function validateBackup(input:unknown):Backup {
    people.set(row.id,row.value);
   }
   if(row.kind==="group")groups.set(row.id,row.value);
-  if(row.kind==="branch"){const name=String(row.value.name).toLocaleLowerCase("ru");if(branchSets[row.dataset].has(name))throw new Error("В файле повторяются названия филиалов.");branchSets[row.dataset].add(name)}
+  if(row.kind==="branch"&&!row.value.archived){const name=String(row.value.name).toLocaleLowerCase("ru");if(branchSets[row.dataset].has(name))throw new Error("В файле повторяются названия филиалов.");branchSets[row.dataset].add(name)}
  }
  for(const row of backup.records){
-  const branch=row.kind==="branch"?row.value.source:row.kind==="person"||row.kind==="group"?row.value.branch:null;
+  const branch=row.kind==="branch"?(row.value.archived?null:row.value.source):row.kind==="person"||row.kind==="group"?row.value.branch:null;
   if(branch&&!branchSets[row.dataset].has(String(branch).toLocaleLowerCase("ru")))throw new Error("В файле отсутствует связанный филиал.");
   const teacherId=row.kind==="exam"||row.kind==="group"||row.kind==="check"&&row.value.assessmentType==="reading"||row.kind==="person"&&row.value.kind==="student"?row.value.teacherId:null;
   if(teacherId&&people.get(`${row.dataset}:${teacherId}`)?.kind!=="teacher")throw new Error("В файле отсутствует учитель, связанный с учеником или экзаменом.");

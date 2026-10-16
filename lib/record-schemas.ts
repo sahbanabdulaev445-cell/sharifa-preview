@@ -1,5 +1,5 @@
 import {z} from "zod";
-import {criteria,today} from "./analytics";
+import {criteria,today,branches} from "./analytics";
 const id=z.string().min(1).max(100).regex(/^[a-zA-Z0-9-]+$/);
 const calendarDate=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>!Number.isNaN(Date.parse(v))&&new Date(v+"T12:00:00Z").toISOString().slice(0,10)===v,"Укажите существующую дату");
 const date=calendarDate.refine(v=>v<=today(),"Дата не может быть в будущем");
@@ -22,7 +22,8 @@ function checkSchema(checkDate:z.ZodType<string>){
 export const birthYearSchema=z.number().int("Укажите год целым числом").min(1900,"Год рождения — не ранее 1900").refine(year=>year<=Number(today().slice(0,4)),"Год рождения не может быть в будущем");
 export const passportSchema=z.object({series:z.string().regex(/^\d{4}$/, "Серия паспорта — 4 цифры").optional(),number:z.string().regex(/^\d{6}$/,"Номер паспорта — 6 цифр").optional(),issuedBy:z.string().trim().min(1).max(300).optional(),issueDate:date.optional(),departmentCode:z.string().regex(/^\d{3}-\d{3}$/,"Код подразделения — в формате 000-000").optional(),birthDate:date.optional(),birthPlace:z.string().trim().min(1).max(300).optional(),registrationAddress:z.string().trim().min(1).max(1000).optional()}).refine(p=>!p.birthDate||!p.issueDate||p.issueDate>=p.birthDate,"Дата выдачи паспорта не может быть раньше даты рождения");
 export const recordSchemas={
- branch:z.object({id,name:branch,source:branch.optional()}),
+ branch:z.object({id,name:branch,source:branch.optional(),replaces:z.string().refine(v=>branches.includes(v)).optional(),archived:z.boolean().optional(),address:z.string().trim().max(300).optional(),phone:z.string().trim().max(40).optional(),note:z.string().trim().max(1000).optional()}),
+ "branch-action":z.object({id,action:z.enum(["update","delete","restore"]),name:branch.optional(),address:z.string().trim().max(300).optional(),phone:z.string().trim().max(40).optional(),note:z.string().trim().max(1000).optional(),destination:branch.optional()}),
  person:z.object({id,kind:z.enum(["teacher","student"]),name:z.string().trim().min(2).max(100),gender:z.enum(["male","female"]),branch,groups:z.string().trim().max(2000),groupAssignments:z.array(assignmentSchema).max(500).refine(a=>new Set(a.map(g=>g.groupId)).size===a.length).optional(),groupId:id.optional(),teacherId:id.optional(),birthYear:birthYearSchema.optional(),age:z.number().int().min(3).max(100).optional(),level:z.enum(["Начальный","Средний","Продвинутый"]).optional(),startDate:date.optional(),passport:passportSchema.optional(),archived:z.boolean().optional()}),
  group,check:checkSchema(date),
  exam:z.object({id,teacherId:id,date,juz:z.number().int().min(1).max(30),createdAt:z.string().datetime().optional(),...scores,note:z.string().max(2000)}),
