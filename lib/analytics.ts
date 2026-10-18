@@ -61,7 +61,21 @@ export function result(data:Data,p:Person,month="all"):number|null {const check=
 export function previousMonth(month:string) {const d=new Date(month+"-15T12:00:00");d.setMonth(d.getMonth()-1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`}
 export function delta(data:Data,p:Person,month="all") {const c=latest(data,p.id,month);if(!c)return null;if(p.kind==="student")return checkProgress(data,c).totalChange;const currentMonth=c.date.slice(0,7);const now=result(data,p,month==="all"?currentMonth:month),before=result(data,p,previousMonth(currentMonth));return now!=null&&before!=null?now-before:null}
 export function studentsOf(data:Data,id:string) {const teacher=data.people.find(p=>p.id===id);if(!teacher)return [];return data.people.filter(p=>{if(p.kind!=="student"||p.archived)return false;const group=data.groups.find(g=>p.groupId?g.id===p.groupId:g.teacherId===p.teacherId&&g.branch===p.branch&&g.name===p.groups&&g.gender===p.gender);return group?teachesGroup(teacher,group):p.teacherId===id})}
-export function alerts(data:Data,p:Person,month="all") {const c=latest(data,p.id,month);if(!c)return [];const out:string[]=[];for(const k of checkCriteria(c)){const score=c[k.key];if(score==null)continue;if(score<data.settings.attention)out.push(`${k.label}: ${num(score)}. ${p.kind==="teacher"?"Требуется проверка группы":"Рекомендуется повторная проверка"}.`);const prev=p.kind==="student"?previousCheck(data,c):latest(data,p.id,previousMonth(c.date.slice(0,7))),before=prev?.[k.key];if(before!=null&&before-score>=data.settings.decline)out.push(`${k.label}: снижение на ${num(before-score)} балла ${p.kind==="student"?"с прошлой проверки":"за месяц"}.`)}const r=result(data,p,month);if(!out.length&&r!=null&&r<data.settings.attention)out.push(`Итог ${num(r)} ниже порога ${num(data.settings.attention)}. Рекомендуется проверка.`);return out}
+export type AttentionSignal={key:typeof criteria[number]["key"]|"total";label:string;type:"low"|"decline";value:number;before?:number;change?:number;previousDate?:string};
+export function attentionSignals(data:Data,p:Person,month="all"):AttentionSignal[]{
+ const c=latest(data,p.id,month);if(!c)return [];
+ const out:AttentionSignal[]=[],prev=p.kind==="student"?previousCheck(data,c):latest(data,p.id,previousMonth(c.date.slice(0,7)));
+ for(const k of checkCriteria(c)){
+  const score=c[k.key];if(score==null)continue;
+  if(score<data.settings.attention)out.push({key:k.key,label:k.label,type:"low",value:score});
+  const before=prev?.[k.key];
+  if(before!=null&&before-score>=data.settings.decline)out.push({key:k.key,label:k.label,type:"decline",value:score,before,change:before-score,previousDate:prev!.date});
+ }
+ const r=result(data,p,month);
+ if(!out.length&&r!=null&&r<data.settings.attention)out.push({key:"total",label:"Рейтинг",type:"low",value:r});
+ return out;
+}
+export function alerts(data:Data,p:Person,month="all"){return attentionSignals(data,p,month).map(s=>s.type==="decline"?`${s.label}: снижение на ${num(s.change)} балла ${p.kind==="student"?"с прошлой проверки":"за месяц"}.`:s.key==="total"?`Итог ${num(s.value)} ниже порога ${num(data.settings.attention)}. Рекомендуется проверка.`:`${s.label}: ${num(s.value)}. ${p.kind==="teacher"?"Требуется проверка группы":"Рекомендуется повторная проверка"}.`)}
 export function demoData():Data {
  const people:Person[]=[],checks:Check[]=[],exams:Exam[]=[];
  const names=["Ахмад Абдуллаев","Мухаммад Магомедов","Фатима Ибрагимова","Аиша Алиева","Умар Гаджиев","Марьям Сулейманова","Али Юсупов","Хадиджа Расулова"];
