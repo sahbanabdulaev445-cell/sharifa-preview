@@ -7,6 +7,7 @@ import ts from "typescript";
 import {verifyTeacherGroups} from "./teacher-groups-cases.mjs";
 import {verifyPersonForms} from "./person-forms-cases.mjs";
 import {verifyBranchManagement} from "./branch-management-cases.mjs";
+import {verifyLessonRecords} from "./lesson-records-cases.mjs";
 const nativeRequire=createRequire(import.meta.url),cache=new Map(),saved=new Map();
 let failWrite=false;
 Object.defineProperty(globalThis,"localStorage",{configurable:true,value:{getItem:key=>saved.get(key)??null,setItem(key,value){if(failWrite)throw new Error("Storage quota test");saved.set(key,value)}}});
@@ -73,6 +74,7 @@ await post("group",{...data.groups.find(g=>g.id===group.id),level:"x".repeat(81)
 assert.deepEqual(await storage.readData("work"),data,"Invalid scores and levels cannot overwrite stored data");
 await verifyPersonForms({post,readData:()=>storage.readData("work"),model,groupHelpers:groups,preferences:load("lib/student-preferences.ts")});
 await verifyBranchManagement({post,readData:()=>storage.readData("work"),model,async failAction(value){const oldError=console.error;failWrite=true;console.error=()=>{};try{await post("branch-action",value,503)}finally{failWrite=false;console.error=oldError}}});
+await verifyLessonRecords({post,readData:()=>storage.readData("work"),model,lessonHelpers:load("lib/lesson-assessments.ts"),quran:load("lib/quran.ts"),share:load("lib/share-report.ts"),schemas:load("lib/record-schemas.ts")});
 data=await storage.readData("work");
 const response=await backupApi.GET();assert.equal(response.status,200);const exported=await response.json();assert.equal(exported.version,3);
 const restore=await backupApi.POST(new Request("https://preview.test/api/backup",{method:"POST",headers:{Origin:"https://preview.test","Content-Type":"application/json"},body:JSON.stringify(exported)}));assert.equal(restore.status,200);assert.deepEqual(await storage.readData("work"),data);

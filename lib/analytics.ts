@@ -1,3 +1,4 @@
+import type {StudiedMaterial} from "./quran";
 export const branches = ["Гамидова", "Акушинского", "Каспийск", "Петра Первого"];
 export type Branch = {id:string;name:string;source?:string;replaces?:string;archived?:boolean;address?:string;phone?:string;note?:string};
 export const defaultBranchId=(name:string)=>`branch-default-${branches.indexOf(name)+1}`;
@@ -16,8 +17,8 @@ export const defaultLessonTimes:LessonTime[] = ["09:00","10:00","11:00","14:00",
 export function teachesGroup(teacher:Person,group:Group){return teacher.groupAssignments?teacher.groupAssignments.some(a=>a.groupId===group.id):group.teacherId===teacher.id}
 export type GroupScheduleDraft = Pick<Group,"id"|"days"|"startTime"|"endTime">;
 export const readingModes = [{value:"quran",label:"По Корану"},{value:"memory",label:"Наизусть"}] as const;
-export type Check = {makhraj:number;tajweed:number;hifz?:number;attendance?:number;id:string;personId:string;date:string;note:string;createdAt?:string;assessmentType?:"reading";readingMode?:"quran"|"memory";groupId?:string;teacherId?:string};
-export const checkCriteria = (check:Check) => check.assessmentType==="reading"?criteria.slice(0,check.hifz==null?2:3):criteria;
+export type Check = {makhraj:number;tajweed:number;hifz?:number;attendance?:number;material?:StudiedMaterial;id:string;personId:string;date:string;note:string;createdAt?:string;assessmentType?:"reading";readingMode?:"quran"|"memory";groupId?:string;teacherId?:string};
+export const checkCriteria = (check:Check) => check.assessmentType==="reading"?[...criteria.slice(0,check.hifz==null?2:3),...(check.attendance!=null?[criteria[3]]:[])]:criteria;
 export type Exam = Scores & {id:string;teacherId:string;date:string;juz:number;note:string;createdAt?:string};
 export type Settings = {weights:Scores & {students:number};attention:number;decline:number;examPass:number;lessonTimes?:LessonTime[]};
 export type Data = {people:Person[];groups:Group[];branches?:Branch[];checks:Check[];exams:Exam[];settings:Settings};
@@ -52,7 +53,8 @@ export function checkProgress(data:Data,current:Check){
  const previous=previousCheck(data,current);
  const metrics=checkCriteria(current).map(c=>({...c,value:current[c.key]!,before:previous?.[c.key]??null,change:previous?.[c.key]==null?null:current[c.key]!-previous[c.key]!}));
  const best=Math.max(...metrics.map(c=>c.value));
- const sameCriteria=previous&&checkCriteria(current).map(c=>c.key).join()===checkCriteria(previous).map(c=>c.key).join();
+ const totalKeys=(c:Check)=>checkCriteria(c).filter(k=>c.assessmentType!=="reading"||k.key!=="attendance").map(k=>k.key).join();
+ const sameCriteria=previous&&totalKeys(current)===totalKeys(previous);
  const score=weighted(current,data.settings.weights),before=previous?weighted(previous,data.settings.weights):null;
  return {previous,metrics,score,before,totalChange:sameCriteria&&score!=null&&before!=null?score-before:null,strongest:metrics.filter(c=>c.value===best),needsWork:metrics.filter(c=>c.value<data.settings.attention)};
 }

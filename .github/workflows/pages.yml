@@ -25,6 +25,7 @@ jobs:
       - run: node scripts/verify-rankings.mjs
       - run: node scripts/verify-person-search.mjs
       - run: node scripts/verify-attention.mjs
+      - run: node scripts/verify-lesson-records.mjs
       - run: node node_modules/vite/bin/vite.js build --config vite.pages.config.ts
       - uses: actions/upload-pages-artifact@v4
         with:

@@ -1,10 +1,20 @@
 import {z} from "zod";
 import {criteria,today,branches} from "./analytics";
+import {surahById,surahRangeInJuz} from "./quran";
 const id=z.string().min(1).max(100).regex(/^[a-zA-Z0-9-]+$/);
 const calendarDate=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>!Number.isNaN(Date.parse(v))&&new Date(v+"T12:00:00Z").toISOString().slice(0,10)===v,"Укажите существующую дату");
 const date=calendarDate.refine(v=>v<=today(),"Дата не может быть в будущем");
 const score=z.number().min(0).max(10);
 const scores={makhraj:score,tajweed:score,hifz:score,attendance:score};
+export const materialSchema=z.object({juz:z.number().int().min(1).max(30),surah:z.number().int().min(1).max(114),wholeSurah:z.boolean(),fromAyah:z.number().int().min(1).optional(),toAyah:z.number().int().min(1).optional()}).strict().superRefine((v,ctx)=>{
+ const s=surahById(v.surah);if(!s)return;
+ const issue=(path:string,message:string)=>ctx.addIssue({code:z.ZodIssueCode.custom,path:[path],message});
+ if(v.wholeSurah){if(v.fromAyah!==undefined||v.toAyah!==undefined)issue("wholeSurah","Для всей суры диапазон аятов не нужен")}
+ else if(v.fromAyah==null||v.toAyah==null)issue("fromAyah","Укажите начальный и конечный аяты");
+ else{if(v.fromAyah>s.verses||v.toAyah>s.verses)issue("toAyah",`В выбранной суре ${s.verses} аятов`);if(v.toAyah<v.fromAyah)issue("toAyah","Конечный аят не может быть меньше начального")}
+ const range=surahRangeInJuz(v.surah,v.juz);
+ if(!range||!v.wholeSurah&&v.fromAyah!=null&&v.toAyah!=null&&(v.toAyah<range.from||v.fromAyah>range.to))issue("juz","Выбранные сура и аяты не относятся к этому джузу");
+});
 const branch=z.string().trim().min(1).max(100);
 const time=z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/,"Укажите время в формате ЧЧ:ММ");
 const groupShape={id,name:z.string().trim().min(1,"Введите название группы").max(80,"Название группы — до 80 символов").refine(v=>!v.includes(","),"Название группы не должно содержать запятую"),level:z.string().trim().min(1).max(80).optional(),teacherId:id,branch,gender:z.enum(["male","female"])};
@@ -15,9 +25,9 @@ const assignmentSchema=z.object({groupId:id,days:z.array(z.number().int().min(0)
 export const groupSchedulesSchema=z.array(z.object({id,...scheduleShape}).refine(g=>g.endTime>g.startTime,"Окончание занятия должно быть позже начала")).max(500).refine(items=>new Set(items.map(g=>g.id)).size===items.length,"Расписание группы повторяется");
 const backupGroup=z.object({...groupShape,days:z.array(z.number().int().min(0).max(6)).max(7),startTime:z.union([time,z.literal("")]),endTime:z.union([time,z.literal("")])}).refine(g=>(!g.days.length&&!g.startTime&&!g.endTime)||(g.days.length>0&&g.startTime!==""&&g.endTime>g.startTime),"Некорректное расписание группы");
 function checkSchema(checkDate:z.ZodType<string>){
- const common={id,personId:id,date:checkDate,createdAt:z.string().datetime().optional(),note:z.string().max(2000)};
+ const common={id,personId:id,date:checkDate,createdAt:z.string().datetime().optional(),note:z.string().max(2000),material:materialSchema.optional()};
  const readingScore=z.number().min(1,"Оценка должна быть от 1 до 10").max(10,"Оценка должна быть от 1 до 10");
- return z.union([z.object({...common,...scores,assessmentType:z.undefined()}),z.object({...common,assessmentType:z.literal("reading"),groupId:id,teacherId:id,readingMode:z.enum(["quran","memory"]),makhraj:readingScore,tajweed:readingScore,hifz:readingScore.optional()})]);
+ return z.union([z.object({...common,...scores,assessmentType:z.undefined()}),z.object({...common,assessmentType:z.literal("reading"),groupId:id,teacherId:id,readingMode:z.enum(["quran","memory"]),makhraj:readingScore,tajweed:readingScore,hifz:readingScore.optional(),attendance:score.optional()})]);
 }
 export const birthYearSchema=z.number().int("Укажите год целым числом").min(1900,"Год рождения — не ранее 1900").refine(year=>year<=Number(today().slice(0,4)),"Год рождения не может быть в будущем");
 export const passportSchema=z.object({series:z.string().regex(/^\d{4}$/, "Серия паспорта — 4 цифры").optional(),number:z.string().regex(/^\d{6}$/,"Номер паспорта — 6 цифр").optional(),issuedBy:z.string().trim().min(1).max(300).optional(),issueDate:date.optional(),departmentCode:z.string().regex(/^\d{3}-\d{3}$/,"Код подразделения — в формате 000-000").optional(),birthDate:date.optional(),birthPlace:z.string().trim().min(1).max(300).optional(),registrationAddress:z.string().trim().min(1).max(1000).optional()}).refine(p=>!p.birthDate||!p.issueDate||p.issueDate>=p.birthDate,"Дата выдачи паспорта не может быть раньше даты рождения");
