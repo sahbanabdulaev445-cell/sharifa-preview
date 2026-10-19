@@ -41,7 +41,7 @@ export function validateBackup(input:unknown):Backup {
  for(const row of backup.records){
   const branch=row.kind==="branch"?(row.value.archived?null:row.value.source):row.kind==="person"||row.kind==="group"?row.value.branch:null;
   if(branch&&!branchSets[row.dataset].has(String(branch).toLocaleLowerCase("ru")))throw new Error("В файле отсутствует связанный филиал.");
-  const teacherId=row.kind==="exam"||row.kind==="group"||row.kind==="check"&&row.value.assessmentType==="reading"||row.kind==="person"&&row.value.kind==="student"?row.value.teacherId:null;
+  const teacherId=row.kind==="exam"||row.kind==="group"||row.kind==="check"&&(row.value.assessmentType==="reading"||row.value.assessmentType==="beginner")||row.kind==="person"&&row.value.kind==="student"?row.value.teacherId:null;
   if(teacherId&&people.get(`${row.dataset}:${teacherId}`)?.kind!=="teacher")throw new Error("В файле отсутствует учитель, связанный с учеником или экзаменом.");
   if(row.kind==="check"&&!people.has(`${row.dataset}:${row.value.personId}`))throw new Error("В файле отсутствует человек, к которому относится проверка.");
   if(row.value.groupId&&(row.kind==="person"||row.kind==="check")){
@@ -53,7 +53,7 @@ export function validateBackup(input:unknown):Backup {
   }
   if(row.kind==="person"&&Array.isArray(row.value.groupAssignments))for(const assignment of row.value.groupAssignments){const group=groups.get(`${row.dataset}:${assignment.groupId}`);if(!group||group.branch!==row.value.branch)throw new Error("Назначенная учителю группа отсутствует или относится к другому филиалу.")}
   if(row.kind==="group"&&people.get(`${row.dataset}:${row.value.teacherId}`)?.branch!==row.value.branch)throw new Error("Филиал группы не соответствует филиалу учителя.");
-  if(row.kind==="check"&&row.value.assessmentType==="reading"&&people.get(`${row.dataset}:${row.value.personId}`)?.kind!=="student")throw new Error("Проверка чтения должна относиться к ученику.");
+  if(row.kind==="check"&&(row.value.assessmentType==="reading"||row.value.assessmentType==="beginner")&&people.get(`${row.dataset}:${row.value.personId}`)?.kind!=="student")throw new Error("Учебная проверка должна относиться к ученику.");
  }
  for(const dataset of ["demo","work"]){
   if(!backup.records.some(r=>r.dataset===dataset&&r.kind==="settings"&&r.id===`${dataset}:settings`))throw new Error("В файле отсутствуют настройки одного из наборов данных.");

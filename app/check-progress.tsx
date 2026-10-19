@@ -4,7 +4,7 @@ import {Trend} from "./analytics";
 
 export default function CheckProgress({data,check,compact=false}:{data:Data;check:Check;compact?:boolean}){
  const progress=checkProgress(data,check);
- const tips={makhraj:"Повторите произношение букв.",tajweed:"Закрепите правила таджвида.",hifz:"Повторите заученные суры и аяты.",attendance:"Обратите внимание на регулярность занятий."};
+ const tips={letters:"Повторите буквы.",rules:"Закрепите правила таджвида.",reading:"Потренируйте чтение.",makhraj:"Повторите произношение букв.",tajweed:"Закрепите правила таджвида.",hifz:"Повторите заученные суры и аяты.",attendance:"Обратите внимание на регулярность занятий."};
  return <section className={`check-progress ${compact?"compact":""}`} aria-label="Последняя проверка и прогресс">
   <div className="check-progress-heading"><div><b>Последняя проверка · {dateLabel(check.date)}</b><span>Итог {num(progress.score)} / 10{progress.previous?` · Предыдущая: ${dateLabel(progress.previous.date)}, итог ${num(progress.before)}`:" · Первая проверка этого типа"}</span></div>{progress.previous&&progress.totalChange!==null&&<Trend value={progress.totalChange}/>}</div>
   {progress.previous&&progress.totalChange===null&&<p className="check-progress-note">Состав оценок изменился. Сравнение — по отдельным показателям.</p>}

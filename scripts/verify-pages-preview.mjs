@@ -7,6 +7,7 @@ import ts from "typescript";
 import {verifyTeacherGroups} from "./teacher-groups-cases.mjs";
 import {verifyPersonForms} from "./person-forms-cases.mjs";
 import {verifyBranchManagement} from "./branch-management-cases.mjs";
+import {verifyPeopleAndLevels} from "./people-levels-cases.mjs";
 import {verifyLessonRecords} from "./lesson-records-cases.mjs";
 const nativeRequire=createRequire(import.meta.url),cache=new Map(),saved=new Map();
 let failWrite=false;
@@ -75,6 +76,7 @@ assert.deepEqual(await storage.readData("work"),data,"Invalid scores and levels 
 await verifyPersonForms({post,readData:()=>storage.readData("work"),model,groupHelpers:groups,preferences:load("lib/student-preferences.ts")});
 await verifyBranchManagement({post,readData:()=>storage.readData("work"),model,async failAction(value){const oldError=console.error;failWrite=true;console.error=()=>{};try{await post("branch-action",value,503)}finally{failWrite=false;console.error=oldError}}});
 await verifyLessonRecords({post,readData:()=>storage.readData("work"),model,lessonHelpers:load("lib/lesson-assessments.ts"),quran:load("lib/quran.ts"),share:load("lib/share-report.ts"),schemas:load("lib/record-schemas.ts")});
+await verifyPeopleAndLevels({post,readData:()=>storage.readData("work"),model,async failAction(value){const oldError=console.error;failWrite=true;console.error=()=>{};try{await post("people-action",value,503)}finally{failWrite=false;console.error=oldError}}});
 data=await storage.readData("work");
 const response=await backupApi.GET();assert.equal(response.status,200);const exported=await response.json();assert.equal(exported.version,3);
 const restore=await backupApi.POST(new Request("https://preview.test/api/backup",{method:"POST",headers:{Origin:"https://preview.test","Content-Type":"application/json"},body:JSON.stringify(exported)}));assert.equal(restore.status,200);assert.deepEqual(await storage.readData("work"),data);

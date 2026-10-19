@@ -17,7 +17,7 @@ import {TeacherLessonList} from "./teacher-lessons";
 import type {Editing} from "./editor";
 
 type Save=(kind:string,value:unknown)=>Promise<void>;
-export function ReadingEditor({value,data,onClose,onSave}:{value:Partial<Check>;data:Data;onClose:()=>void;onSave:Save}){
+export function ReadingEditor({value,data,onClose,onSave,onNextPerson}:{value:Partial<Check>;data:Data;onClose:()=>void;onSave:Save;onNextPerson?:(id:string,date:string)=>void}){
  const [personId,setPersonId]=useState(value.personId??""),[id,setId]=useState(value.id??crypto.randomUUID());
  const [date,setDate]=useState(value.date??today()),[mode,setMode]=useState(value.readingMode??"quran");
  const [makhraj,setMakhraj]=useState(value.makhraj?.toString()??""),[tajweed,setTajweed]=useState(value.tajweed?.toString()??""),[hifz,setHifz]=useState(value.hifz?.toString()??""),[note,setNote]=useState(value.note??"");
@@ -37,7 +37,7 @@ export function ReadingEditor({value,data,onClose,onSave}:{value:Partial<Check>;
    const studied=materialFromDraft(material);
    await onSave("check",{id,personId,date,createdAt:value.id?value.createdAt:new Date().toISOString(),assessmentType:"reading",readingMode:mode,groupId:group.id,teacherId:value.teacherId??group.teacherId,makhraj:Number(makhraj),tajweed:Number(tajweed),...(hifz!==""?{hifz:Number(hifz)}:{}),...(attendance!==""?{attendance:Number(attendance)}:{}),...(studied?{material:studied}:{}),note});
    if(anotherLesson){setDate("");setId(crypto.randomUUID());setMakhraj("");setTajweed("");setHifz("");setAttendance("10");setNote("");setSavedMessage(`Урок ${dateLabel(date)} сохранён. Выберите дату следующего урока и заполните новые оценки.`)}
-   else if(continueNext&&next){setPersonId(next.id);setId(crypto.randomUUID());setMakhraj("");setTajweed("");setHifz("");setAttendance("10");setNote("");setSavedMessage("")}
+   else if(continueNext&&next){if(onNextPerson){onNextPerson(next.id,date);return}setPersonId(next.id);setId(crypto.randomUUID());setMakhraj("");setTajweed("");setHifz("");setAttendance("10");setNote("");setSavedMessage("")}
    else onClose();
   }catch(err){setError(err instanceof Error?err.message:"Не удалось сохранить оценки")}finally{setBusy(false)}
  }

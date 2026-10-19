@@ -30,7 +30,8 @@ export async function verifyPersonForms({post,readData,model,groupHelpers,prefer
   const values={gender:"male",branch:"Филиал новых карточек",teacherId:teacher.id,groupId:group.id,groups:group.name,birthYear:"2011",level:"Средний",name:"Не запоминать имя",passport:"Не запоминать паспорт",startDate:"2026-01-01"};
   assert.equal(preferences.rememberStudentValues(values,"work"),true);
   const restored=preferences.studentInitialValues(data,"work");
-  for(const field of ["gender","branch","teacherId","groupId","groups","birthYear","level"])assert.equal(restored[field],values[field]);
+  for(const field of ["gender","branch","teacherId","groupId","groups","birthYear"])assert.equal(restored[field],values[field]);
+  assert.equal(restored.level,"Чтение","Legacy saved level names are mapped to the new labels");
   for(const field of ["name","passport"])assert.equal(restored[field],undefined);
   assert.equal(restored.startDate,model.today(),"A new pupil starts with today's Moscow date, not the last pupil's date");
   assert.equal(preferences.studentInitialValues(data,"demo").startDate,model.today());

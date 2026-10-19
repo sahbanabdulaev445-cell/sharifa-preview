@@ -1,4 +1,5 @@
 import {Data,Person,branchNames,today} from "./analytics";
+import {studentLevels,studentLevel} from "./levels";
 import {availableGroups,teacherHasGroup} from "./groups";
 import {birthYearSchema} from "./record-schemas";
 
@@ -12,7 +13,8 @@ export function studentInitialValues(data:Data,scope:string,context:Partial<Pers
  for(const field of fields)if(context[field]!=null)values[field]=String(context[field]);
  if(!["male","female"].includes(values.gender))values.gender="male";
  if(!branchNames(data).includes(values.branch))values.branch=branchNames(data)[0];
- if(!["Начальный","Средний","Продвинутый"].includes(values.level))values.level="Начальный";
+ values.level=studentLevel(values.level);
+ if(!(studentLevels as readonly string[]).includes(values.level))values.level="Начальный";
  if(values.birthYear&&!birthYearSchema.safeParse(Number(values.birthYear)).success)values.birthYear="";
  if(!data.people.some(p=>p.id===values.teacherId&&p.kind==="teacher"&&!p.archived&&p.branch===values.branch))values.teacherId="";
  const group=availableGroups(data).find(g=>(values.groupId?g.id===values.groupId:g.name===values.groups)&&g.branch===values.branch&&g.gender===values.gender&&(!values.teacherId||teacherHasGroup(data,g,values.teacherId)));
