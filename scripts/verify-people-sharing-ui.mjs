@@ -12,10 +12,13 @@ try{
  const data=structuredClone(model.emptyData),branch=model.branchNames(data)[0];
  const teacher={id:"t",name:"Учитель",kind:"teacher",branch,gender:"male",groups:"Нур"};
  const pupil={id:"p",name:"Ученик",kind:"student",branch,gender:"male",level:"Начальный",teacherId:"t",groupId:"g",groups:"Нур",birthYear:2018};
+ const {GroupEditor}=await load("app/groups-view.tsx");
  const group={id:"g",name:"Нур",teacherId:"t",branch,gender:"male",days:[0],startTime:"09:00",endTime:"10:00"};
  data.people=[teacher,pupil];data.groups=[group];
+ assert.deepEqual(model.groupLevels({...data,groups:[{...group,level:"Старый вариант"}]}),["Начальный","Чтение","Хифз"]);
  const props={data,onSave:async()=>{},onClose:()=>{}};
  const html=(Component,props)=>renderToStaticMarkup(React.createElement(Component,props));
+ const groupForm=html(GroupEditor,{...props,branch,onSaved:()=>{}});assert.ok(groupForm.includes("Уровень группы"));assert.ok(!groupForm.includes("group-level-options"));assert.ok(!groupForm.includes("введите свой"));
  const beginner=html(Editor,{...props,editing:{kind:"check",value:{personId:pupil.id,assessmentType:"reading",groupId:"g",teacherId:"t"}}});
  for(const label of ["Буквы","Правила таджвида","Чтение","Посещаемость"])assert.ok(beginner.includes(label));
  for(const label of ["Махрадж","Пройденный материал",'id="reading-hifz"'])assert.ok(!beginner.includes(label),label);

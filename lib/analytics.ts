@@ -1,5 +1,5 @@
 import type {StudiedMaterial} from "./quran";
-import {beginnerCriteria,studentLevels,groupLevel,StudentLevel} from "./levels";
+import {beginnerCriteria,studentLevels,StudentLevel} from "./levels";
 export const branches = ["Гамидова", "Акушинского", "Каспийск", "Петра Первого"];
 export type Branch = {id:string;name:string;source?:string;replaces?:string;archived?:boolean;address?:string;phone?:string;note?:string};
 export const defaultBranchId=(name:string)=>`branch-default-${branches.indexOf(name)+1}`;
@@ -13,7 +13,7 @@ export type PassportRF={series?:string;number?:string;issuedBy?:string;issueDate
 export type Person = {id:string;kind:"teacher"|"student";name:string;gender:"male"|"female";branch:string;groups:string;groupAssignments?:TeachingAssignment[];groupId?:string;teacherId?:string;birthYear?:number;age?:number;level?:string;startDate?:string;passport?:PassportRF;archived?:boolean};
 export type Group = {id:string;name:string;level?:string;teacherId:string;branch:string;gender:"male"|"female";days:number[];startTime:string;endTime:string};
 export const defaultGroupLevels = studentLevels;
-export const groupLevels = (data:Data) => [...new Set([...defaultGroupLevels,...data.groups.map(g=>groupLevel(g.level)).filter((v):v is string=>!!v)])];
+export const groupLevels = (_data:Data) => [...studentLevels];
 export type LessonTime = {startTime:string;endTime:string};
 export type TeachingAssignment = LessonTime & {groupId:string;days:number[]};
 export const defaultLessonTimes:LessonTime[] = ["09:00","10:00","11:00","14:00","16:00","18:00"].map(startTime=>({startTime,endTime:`${String(Number(startTime.slice(0,2))+1).padStart(2,"0")}:00`}));
