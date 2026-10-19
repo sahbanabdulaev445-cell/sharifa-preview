@@ -4,13 +4,13 @@ import {Group,Person,Branch,branchNames,branchEntries} from "@/lib/analytics";
 import {availableGroups,groupStudents,teacherHasGroup,teacherGroup,groupTeachers} from "@/lib/groups";
 import {planBranchAction,BranchAction} from "@/lib/branches";
 import {planPeopleAction,PeopleAction} from "@/lib/people-actions";
-import {studentLevel} from "@/lib/levels";
+import {studentLevel,groupLevel} from "@/lib/levels";
 import {getChatGPTUser} from "@/app/chatgpt-auth";
 export const dynamic="force-dynamic";
 
 function reply(value:unknown,status=200){return Response.json(value,{status,headers:{"Cache-Control":"no-store"}})}
 function dataset(req:Request){return new URL(req.url).searchParams.get("dataset")==="work"?"work":"demo"}
-export async function GET(req:Request){if(!await getChatGPTUser())return reply({error:"Войдите в сайт, чтобы открыть данные"},401);try{const data=await readData(dataset(req));return reply({...data,people:data.people.map(p=>p.kind==="student"?{...p,level:studentLevel(p.level)}:p)})}catch(e){console.error("Read analytics",e);return reply({error:"Не удалось загрузить данные. Нажмите «Повторить»."},503)}}
+export async function GET(req:Request){if(!await getChatGPTUser())return reply({error:"Войдите в сайт, чтобы открыть данные"},401);try{const data=await readData(dataset(req));return reply({...data,groups:data.groups.map(g=>({...g,level:groupLevel(g.level)})),people:data.people.map(p=>p.kind==="student"?{...p,level:studentLevel(p.level)}:p)})}catch(e){console.error("Read analytics",e);return reply({error:"Не удалось загрузить данные. Нажмите «Повторить»."},503)}}
 export async function POST(req:Request){
  if(!await getChatGPTUser())return reply({error:"Сессия завершена. Обновите страницу и войдите снова."},401);
  const origin=req.headers.get("origin");if(origin&&origin!==new URL(req.url).origin)return reply({error:"Недопустимый источник запроса"},403);
@@ -106,8 +106,9 @@ export async function POST(req:Request){
    if(value.assessmentType==="reading"){
     const g=groups.find(g=>g.id===value.groupId),previous=d.checks.find(c=>c.id===value.id);
     const historical=previous?.assessmentType==="reading"&&previous.personId===p.id&&previous.groupId===value.groupId&&previous.teacherId===value.teacherId;
-    if(p.kind!=="student"||!g||(!historical&&(!(g.teacherId===value.teacherId||teacherHasGroup(d,g,value.teacherId))||!groupStudents(d,g).some(s=>s.id===p.id))))return reply({error:"Ученик должен входить в выбранную группу"},400);
-    if(!d.groups.some(other=>other.id===g.id))writes.push({kind:"group",value:g});
+    if(p.kind!=="student"||value.groupId&&(!g||!historical&&!groupStudents(d,g).some(s=>s.id===p.id)))return reply({error:"Ученик должен входить в выбранную группу"},400);
+    if(value.teacherId&&!d.people.some(t=>t.id===value.teacherId&&t.kind==="teacher"&&(historical||!t.archived&&t.branch===p.branch&&(!g||teacherHasGroup(d,g,t.id)))))return reply({error:"Учитель не найден или не относится к выбранной группе"},400);
+    if(g&&!d.groups.some(other=>other.id===g.id))writes.push({kind:"group",value:g});
    }
   }
   if(kind==="exam"&&"juz"in value&&!d.people.some(p=>p.id===value.teacherId&&p.kind==="teacher"&&!p.archived))return reply({error:"Учитель не найден"},400);

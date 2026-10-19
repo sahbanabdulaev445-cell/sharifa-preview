@@ -1,5 +1,5 @@
 import type {StudiedMaterial} from "./quran";
-import {beginnerCriteria,studentLevels} from "./levels";
+import {beginnerCriteria,studentLevels,groupLevel,StudentLevel} from "./levels";
 export const branches = ["Гамидова", "Акушинского", "Каспийск", "Петра Первого"];
 export type Branch = {id:string;name:string;source?:string;replaces?:string;archived?:boolean;address?:string;phone?:string;note?:string};
 export const defaultBranchId=(name:string)=>`branch-default-${branches.indexOf(name)+1}`;
@@ -12,15 +12,15 @@ export type Scores = {makhraj:number;tajweed:number;hifz:number;attendance:numbe
 export type PassportRF={series?:string;number?:string;issuedBy?:string;issueDate?:string;departmentCode?:string;birthDate?:string;birthPlace?:string;registrationAddress?:string};
 export type Person = {id:string;kind:"teacher"|"student";name:string;gender:"male"|"female";branch:string;groups:string;groupAssignments?:TeachingAssignment[];groupId?:string;teacherId?:string;birthYear?:number;age?:number;level?:string;startDate?:string;passport?:PassportRF;archived?:boolean};
 export type Group = {id:string;name:string;level?:string;teacherId:string;branch:string;gender:"male"|"female";days:number[];startTime:string;endTime:string};
-export const defaultGroupLevels = ["Читающие","Заучивающие","Только перешедшие на Коран"];
-export const groupLevels = (data:Data) => [...new Set([...defaultGroupLevels,...data.groups.map(g=>g.level).filter((v):v is string=>!!v)])];
+export const defaultGroupLevels = studentLevels;
+export const groupLevels = (data:Data) => [...new Set([...defaultGroupLevels,...data.groups.map(g=>groupLevel(g.level)).filter((v):v is string=>!!v)])];
 export type LessonTime = {startTime:string;endTime:string};
 export type TeachingAssignment = LessonTime & {groupId:string;days:number[]};
 export const defaultLessonTimes:LessonTime[] = ["09:00","10:00","11:00","14:00","16:00","18:00"].map(startTime=>({startTime,endTime:`${String(Number(startTime.slice(0,2))+1).padStart(2,"0")}:00`}));
 export function teachesGroup(teacher:Person,group:Group){return teacher.groupAssignments?teacher.groupAssignments.some(a=>a.groupId===group.id):group.teacherId===teacher.id}
 export type GroupScheduleDraft = Pick<Group,"id"|"days"|"startTime"|"endTime">;
 export const readingModes = [{value:"quran",label:"По Корану"},{value:"memory",label:"Наизусть"}] as const;
-export type Check = {makhraj?:number;tajweed?:number;hifz?:number;letters?:number;rules?:number;reading?:number;attendance?:number;material?:StudiedMaterial;id:string;personId:string;date:string;note:string;createdAt?:string;assessmentType?:"reading"|"beginner";readingMode?:"quran"|"memory";groupId?:string;teacherId?:string};
+export type Check = {makhraj?:number;tajweed?:number;hifz?:number;letters?:number;rules?:number;reading?:number;attendance?:number;material?:StudiedMaterial;id:string;personId:string;date:string;note:string;createdAt?:string;assessmentType?:"reading"|"beginner";assessmentLevel?:StudentLevel;readingMode?:"quran"|"memory";groupId?:string;teacherId?:string};
 export const checkCriteria = (check:Check) => check.assessmentType==="beginner"?beginnerCriteria:check.assessmentType==="reading"?[...criteria.slice(0,check.hifz==null?2:3),...(check.attendance!=null?[criteria[3]]:[])]:criteria;
 export type Exam = Scores & {id:string;teacherId:string;date:string;juz:number;note:string;createdAt?:string};
 export type Settings = {weights:Scores & {students:number};attention:number;decline:number;examPass:number;lessonTimes?:LessonTime[]};

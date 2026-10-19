@@ -1,3 +1,4 @@
+import {groupLevel} from "./levels";
 import {Data,Group,Person,avg,checkCriteria,latest,result,weighted,teachesGroup} from "./analytics";
 
 export const weekdays=["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
@@ -8,7 +9,7 @@ function legacyId(teacherId:string,name:string,gender:string){
 }
 // Existing text groups remain available until their schedule is first saved.
 export function availableGroups(data:Data):Group[]{
- const groups=[...(data.groups??[])];
+ const groups:Group[]=(data.groups??[]).map(g=>({...g,level:groupLevel(g.level)}));
  for(const teacher of data.people.filter(p=>p.kind==="teacher"&&!p.archived&&p.groupAssignments===undefined)){
   const names=new Set([...teacher.groups.split(",").map(n=>n.trim()).filter(Boolean),...data.people.filter(p=>p.kind==="student"&&!p.archived&&p.teacherId===teacher.id&&!p.groupId&&p.groups).map(p=>p.groups)]);
   for(const name of names){

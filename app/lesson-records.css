@@ -14,3 +14,5 @@
 .lesson-last-reference{font-size:12px;line-height:1.8;padding:10px 12px;border-radius:8px;background:#f2f6fa;color:#45677f;margin:12px 0}
 .reading-dialog .form-footer{flex-wrap:wrap}.reading-dialog .form-footer>button{min-height:44px;height:auto;font-size:12px;white-space:normal;line-height:1.5;padding:10px 12px}
 .open-whatsapp-web{display:flex;align-items:center;justify-content:center;min-height:44px;font-size:13px;color:#0b6688;text-decoration:underline;text-underline-offset:3px;border-radius:8px}.share-card-actions>button:first-child{background:#176a57;color:#fff}.share-card-dialog [data-slot=dialog-description]{line-height:1.8}.lesson-student-scores small{font-size:11px;overflow-wrap:anywhere;text-align:center}.lesson-averages>div:nth-child(2){grid-template-columns:repeat(auto-fit,minmax(90px,1fr))}
+
+.assessment-level{display:flex;flex-wrap:wrap;gap:10px}.assessment-level label{flex:1;min-width:130px;min-height:44px;justify-content:center}.assessment-level:disabled{opacity:.6}

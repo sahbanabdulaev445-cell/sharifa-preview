@@ -3,7 +3,7 @@ import {useState} from "react";
 import PersonPicker from "./person-picker";
 import MaterialFields from "./material-fields";
 import BeginnerEditor from "./beginner-editor";
-import {studentLevels,studentLevel} from "@/lib/levels";
+import {studentLevels,studentLevel,checkLevel,StudentLevel} from "@/lib/levels";
 import {materialDraft,materialFromDraft} from "@/lib/lesson-assessments";
 import BirthYearPicker from "./birth-year-picker";
 import PassportFields from "./passport-fields";
@@ -23,10 +23,12 @@ export type Editing = {kind:"person"|"check"|"exam";personKind?:"teacher"|"stude
 type EditorProps={storageScope?:string;editing:Editing;data:Data;onClose:()=>void;onSave:(kind:string,value:unknown)=>Promise<void>};
 export default function Editor(props:EditorProps){
  const [value,setValue]=useState(props.editing.value),person=props.data.people.find(p=>p.id===value?.personId);
- const choose=(personId:string,date?:string)=>setValue(v=>({...v,personId,...(date?{date}:{})}));
+ const choose=(personId:string,date?:string)=>setValue(v=>{const p=props.data.people.find(p=>p.id===personId);return {...v,personId,assessmentLevel:undefined,...(!v?.id&&p?.kind==="student"?{assessmentType:studentLevel(p.level)==="Начальный"?"beginner" as const:"reading" as const}:{}),...(date?{date}:{})}});
+ const changeLevel=(level:StudentLevel,draft:Partial<Check>)=>setValue(v=>({...v,...draft,assessmentLevel:level,assessmentType:level==="Начальный"?"beginner":"reading"}));
  const editing={...props.editing,value};
- if(editing.kind==="check"&&(value?.assessmentType==="beginner"||!value?.id&&person?.kind==="student"&&studentLevel(person.level)==="Начальный"))return <BeginnerEditor key={value?.id??person?.id??"new"} data={props.data} value={value} onSave={props.onSave} onClose={props.onClose} onPersonSelect={choose}/>;
- if(editing.kind==="check"&&value?.assessmentType==="reading")return <ReadingEditor key={value.id??value.personId} value={value} data={props.data} onClose={props.onClose} onSave={props.onSave} onNextPerson={choose}/>;
+ const level=value?.assessmentLevel??(value?.id?checkLevel(value):person?.kind==="student"?studentLevel(person.level):undefined);
+ if(editing.kind==="check"&&(value?.assessmentType==="beginner"||!value?.id&&person?.kind==="student"&&level==="Начальный"))return <BeginnerEditor key={`${value?.id??person?.id??"new"}:${level}`} data={props.data} value={value} onSave={props.onSave} onClose={props.onClose} onPersonSelect={choose} onLevelChange={changeLevel}/>;
+ if(editing.kind==="check"&&(value?.assessmentType==="reading"||!value?.id&&person?.kind==="student"))return <ReadingEditor key={`${value?.id??value?.personId}:${level}`} value={{...value,assessmentLevel:level==="Хифз"?"Хифз":"Чтение"}} data={props.data} onClose={props.onClose} onSave={props.onSave} onNextPerson={choose} onLevelChange={changeLevel}/>;
  return <GeneralEditor key={value?.id??value?.personId??"new"} {...props} editing={editing} onPersonSelect={choose}/>;
 }
 function GeneralEditor({editing,data,onClose,onSave,storageScope="work",onPersonSelect}:EditorProps&{onPersonSelect?:(id:string)=>void}){

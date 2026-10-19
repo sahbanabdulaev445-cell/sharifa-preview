@@ -22,6 +22,17 @@ export async function verifyPeopleAndLevels({post,readData,model,failAction}){
  const general={id:"beginner-old-general",personId:s1.id,date:"2026-09-30",makhraj:2,tajweed:3,hifz:4,attendance:10,note:"Старый вид проверки"};
  await post("check",general);data=await readData();assert.equal(model.previousCheck(data,saved),null,"A beginner check never compares against old Quran criteria");
  assert.deepEqual(model.checkCriteria(data.checks.find(c=>c.id===general.id)).map(k=>k.label),["Махрадж","Таджвид","Хифз","Посещаемость"]);
+ // Each lesson stores its selected level; it does not depend on later pupil edits.
+ for(const level of ["Чтение","Хифз"]){
+  const lesson={id:level==="Хифз"?"level-hifz":"level-reading",personId:s1.id,date:"2026-10-02",assessmentType:"reading",assessmentLevel:level,makhraj:8,tajweed:7,hifz:6,attendance:10,note:"Без обязательной группы"};
+  await post("check",lesson);const persisted=(await readData()).checks.find(c=>c.id===lesson.id);assert.equal(persisted.assessmentLevel,level);assert.equal(persisted.readingMode,undefined);
+ }
+ await post("check",{...check,id:"level-beginner",assessmentLevel:"Начальный"});
+ await post("check",{...check,id:"level-invalid",assessmentLevel:"Хифз"},400);
+ await post("check",{id:"level-invalid",personId:s1.id,date:"2026-10-02",assessmentType:"reading",assessmentLevel:"Начальный",makhraj:8,tajweed:7,note:""},400);
+ await post("group",{...ga,level:"Читающие"});assert.equal((await readData()).groups.find(g=>g.id===ga.id).level,"Чтение");
+ await post("group",{...gb,level:"Заучивающие"});assert.equal((await readData()).groups.find(g=>g.id===gb.id).level,"Хифз");
+ data=await readData();
  const action=(ids,extra={})=>({id:crypto.randomUUID(),action:"archive",personKind:"student",ids,...extra});
  const history=JSON.stringify({checks:data.checks,exams:data.exams});
  await post("people-action",action([s1.id,s2.id]));data=await readData();assert.ok(data.people.find(p=>p.id===s1.id).archived);assert.ok(data.people.find(p=>p.id===s2.id).archived);
