@@ -11,7 +11,7 @@ export type CriterionKey=typeof allCriteria[number]["key"];
 export type Scores = {makhraj:number;tajweed:number;hifz:number;attendance:number};
 export type PassportRF={series?:string;number?:string;issuedBy?:string;issueDate?:string;departmentCode?:string;birthDate?:string;birthPlace?:string;registrationAddress?:string};
 export type Person = {id:string;kind:"teacher"|"student";name:string;gender:"male"|"female";branch:string;groups:string;groupAssignments?:TeachingAssignment[];groupId?:string;teacherId?:string;birthYear?:number;age?:number;level?:string;startDate?:string;passport?:PassportRF;archived?:boolean};
-export type Group = {id:string;name:string;level?:string;teacherId:string;branch:string;gender:"male"|"female";days:number[];startTime:string;endTime:string};
+export type Group = {archived?:boolean;id:string;name:string;level?:string;teacherId:string;branch:string;gender:"male"|"female";days:number[];startTime:string;endTime:string};
 export const defaultGroupLevels = studentLevels;
 export const groupLevels = (_data:Data) => [...studentLevels];
 export type LessonTime = {startTime:string;endTime:string};

@@ -1,3 +1,4 @@
+import {verifyGroupManagement} from "./group-management-cases.mjs";
 // Isolated SQLite integration checks. Never reads or modifies user data.
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -130,6 +131,7 @@ await verifyPersonForms({post,readData:()=>storage.readData("work"),model,groupH
 await verifyBranchManagement({post,readData:()=>storage.readData("work"),model,async failAction(value){const oldError=console.error;failBatch=true;console.error=()=>{};try{await post("branch-action",value,503)}finally{failBatch=false;console.error=oldError}}});
 await verifyLessonRecords({post,readData:()=>storage.readData("work"),model,lessonHelpers:load("lib/lesson-assessments.ts"),quran:load("lib/quran.ts"),share:load("lib/share-report.ts"),schemas:load("lib/record-schemas.ts")});
 await verifyPeopleAndLevels({post,readData:()=>storage.readData("work"),model,async failAction(value){const oldError=console.error;failBatch=true;console.error=()=>{};try{await post("people-action",value,503)}finally{failBatch=false;console.error=oldError}}});
+await verifyGroupManagement({post,readData:()=>storage.readData("work"),model,groupHelpers:groups,async failAction(value){const oldError=console.error;failBatch=true;console.error=()=>{};try{await post("group-action",value,503)}finally{failBatch=false;console.error=oldError}}});
 const formsBackup=await backup.exportBackup();await backup.restoreBackup(formsBackup);
 assert.deepEqual((await backup.exportBackup()).records,formsBackup.records);
 sqlite.close();console.log("PASS: groups, schedules, gender separation, alphabetical roster, atomic transfers/removal/rollback, two-score readings, group and teacher totals, persistent priority/recheck, validation, legacy groups, and backup round trip.");

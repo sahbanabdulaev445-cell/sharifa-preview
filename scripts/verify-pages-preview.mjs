@@ -1,3 +1,4 @@
+import {verifyGroupManagement} from "./group-management-cases.mjs";
 // Browser-storage integration checks in memory; no real browser or user data.
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -78,6 +79,7 @@ await verifyPersonForms({post,readData:()=>storage.readData("work"),model,groupH
 await verifyBranchManagement({post,readData:()=>storage.readData("work"),model,async failAction(value){const oldError=console.error;failWrite=true;console.error=()=>{};try{await post("branch-action",value,503)}finally{failWrite=false;console.error=oldError}}});
 await verifyLessonRecords({post,readData:()=>storage.readData("work"),model,lessonHelpers:load("lib/lesson-assessments.ts"),quran:load("lib/quran.ts"),share:load("lib/share-report.ts"),schemas:load("lib/record-schemas.ts")});
 await verifyPeopleAndLevels({post,readData:()=>storage.readData("work"),model,async failAction(value){const oldError=console.error;failWrite=true;console.error=()=>{};try{await post("people-action",value,503)}finally{failWrite=false;console.error=oldError}}});
+await verifyGroupManagement({post,readData:()=>storage.readData("work"),model,groupHelpers:groups,async failAction(value){const oldError=console.error;failWrite=true;console.error=()=>{};try{await post("group-action",value,503)}finally{failWrite=false;console.error=oldError}}});
 data=await storage.readData("work");
 const response=await backupApi.GET();assert.equal(response.status,200);const exported=await response.json();assert.equal(exported.version,3);
 const restore=await backupApi.POST(new Request("https://preview.test/api/backup",{method:"POST",headers:{Origin:"https://preview.test","Content-Type":"application/json"},body:JSON.stringify(exported)}));assert.equal(restore.status,200);assert.deepEqual(await storage.readData("work"),data);

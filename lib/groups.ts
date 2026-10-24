@@ -19,7 +19,7 @@ export function availableGroups(data:Data):Group[]{
    for(const gender of genders)if(!groups.some(g=>g.teacherId===teacher.id&&g.name===name&&g.gender===gender))groups.push({id:legacyId(teacher.id,name,gender),name,teacherId:teacher.id,branch:teacher.branch,gender,days:[],startTime:"",endTime:""});
   }
  }
- return groups.filter(g=>data.people.some(p=>p.kind==="teacher"&&!p.archived&&p.branch===g.branch&&(p.id===g.teacherId||teachesGroup(p,g)))).sort((a,b)=>a.name.localeCompare(b.name,"ru",{numeric:true})||a.branch.localeCompare(b.branch,"ru"));
+ return groups.filter(g=>!g.archived&&data.people.some(p=>p.kind==="teacher"&&!p.archived&&p.branch===g.branch&&(p.id===g.teacherId||teachesGroup(p,g)))).sort((a,b)=>a.name.localeCompare(b.name,"ru",{numeric:true})||a.branch.localeCompare(b.branch,"ru"));
 }
 export function groupStudents(data:Data,group:Group):Person[]{return data.people.filter(p=>p.kind==="student"&&!p.archived&&(p.groupId?p.groupId===group.id:p.teacherId===group.teacherId&&p.branch===group.branch&&p.groups===group.name&&p.gender===group.gender)).sort((a,b)=>a.name.localeCompare(b.name,"ru"))}
 export function groupResult(data:Data,group:Group,period="all"){return avg(groupStudents(data,group).map(p=>result(data,p,period)))}

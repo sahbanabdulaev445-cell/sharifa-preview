@@ -2,7 +2,7 @@ import {Data,Group,Person} from "./analytics";
 import {availableGroups,groupStudents,teacherGroup,teacherHasGroup} from "./groups";
 export type PeopleAction={id:string;action:"archive"|"restore";personKind:"student"|"teacher";ids:string[];replacements?:Record<string,string>};
 export function teacherTransferNeeds(data:Data,ids:string[]){
- const selected=new Set(ids),groups=availableGroups(data);
+ const selected=new Set(ids),groups=[...availableGroups(data),...data.groups.filter(g=>g.archived)];
  return [...new Set(data.people.filter(p=>p.kind==="teacher"&&selected.has(p.id)).filter(t=>groups.some(g=>g.teacherId===t.id)||data.people.some(p=>p.kind==="student"&&p.teacherId===t.id)).map(t=>t.branch))];
 }
 export function planPeopleAction(data:Data,action:PeopleAction):{kind:"person"|"group";value:Person|Group}[]{
@@ -11,7 +11,7 @@ export function planPeopleAction(data:Data,action:PeopleAction):{kind:"person"|"
  const selected=people as Person[],next=new Map<string,Person>(),groupWrites=new Map<string,Group>();
  if(action.action==="restore")return selected.map(p=>({kind:"person",value:{...p,archived:false}}));
  if(action.personKind==="student")return selected.map(p=>({kind:"person",value:{...p,archived:true}}));
- const groups=availableGroups(data),destinations=new Map<string,Person>();
+ const groups=[...availableGroups(data),...data.groups.filter(g=>g.archived)],destinations=new Map<string,Person>();
  for(const branch of teacherTransferNeeds(data,action.ids)){
   const t=data.people.find(p=>p.id===action.replacements?.[branch]&&p.kind==="teacher"&&!p.archived&&!ids.has(p.id)&&p.branch===branch);
   if(!t)throw new Error(`Филиал «${branch}»: выберите действующего учителя для переноса учеников и групп.`);
@@ -28,9 +28,9 @@ export function planPeopleAction(data:Data,action:PeopleAction):{kind:"person"|"
   next.set(p.id,{...p,teacherId:t.id,...(g?{groupId:g.id,groups:g.name}:{})});
  }
  for(const target of destinations.values()){
-  const existing=groups.filter(g=>teacherHasGroup(data,g,target.id));
+  const existing=groups.filter(g=>!g.archived&&teacherHasGroup(data,g,target.id));
   const assigned=new Map(existing.map(g=>[g.id,{groupId:g.id,...(({days,startTime,endTime})=>({days,startTime,endTime}))(teacherGroup(data,g,target.id))}]));
-  for(const gid of added.get(target.id)??[]){const g=groupWrites.get(gid)??groups.find(g=>g.id===gid)!;if(!assigned.has(gid))assigned.set(gid,{groupId:gid,days:g.days,startTime:g.startTime,endTime:g.endTime})}
+  for(const gid of added.get(target.id)??[]){const g=groupWrites.get(gid)??groups.find(g=>g.id===gid)!;if(!g.archived&&!assigned.has(gid))assigned.set(gid,{groupId:gid,days:g.days,startTime:g.startTime,endTime:g.endTime})}
   const names=[...new Set([...assigned.keys()].map(gid=>(groupWrites.get(gid)??groups.find(g=>g.id===gid))!.name))].join(", ");
   if(assigned.size>500||names.length>2000)throw new Error("У выбранного учителя слишком много групп. Удаляйте учителей по очереди и распределите группы между несколькими учителями.");
   next.set(target.id,{...target,groupAssignments:[...assigned.values()],groups:names});

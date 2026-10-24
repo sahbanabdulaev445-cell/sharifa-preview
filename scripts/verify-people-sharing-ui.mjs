@@ -18,6 +18,15 @@ try{
  assert.deepEqual(model.groupLevels({...data,groups:[{...group,level:"Старый вариант"}]}),["Начальный","Чтение","Хифз"]);
  const props={data,onSave:async()=>{},onClose:()=>{}};
  const html=(Component,props)=>renderToStaticMarkup(React.createElement(Component,props));
+ const {default:Workspace}=await load("app/branch-workspace.tsx"),{default:Groups}=await load("app/groups-view.tsx");
+ const otherBranch=model.branchNames(data)[1];data.people.push({...teacher,id:"outside",name:"Учитель чужого филиала",branch:otherBranch});
+ const workspaceProps={entry:model.branchEntries(data).find(b=>b.name===branch),data,period:"all",onSave:async()=>{},onClose:()=>{},onSaved:()=>{}};
+ const overview=html(Workspace,workspaceProps);for(const label of ["Управление филиалом","Учителя","Группы","Ученики","Проверки","Основные данные","Сохранить данные филиала"])assert.ok(overview.includes(label));
+ const teacherWorkspace=html(Workspace,{...workspaceProps,initialTab:"teachers"});assert.ok(teacherWorkspace.includes("Учитель"));assert.ok(teacherWorkspace.includes("Редактировать"));assert.ok(!teacherWorkspace.includes("Учитель чужого филиала"));
+ const groupWorkspace=html(Workspace,{...workspaceProps,initialTab:"groups"});assert.ok(groupWorkspace.includes("Удалить"));assert.ok(groupWorkspace.includes("Редактировать"));assert.ok(groupWorkspace.includes("Нур"));
+ const directory=html(Groups,{data,branch,period:"all",onSave:async()=>{},onEdit:()=>{},onDetail:()=>{}});assert.ok(directory.includes("Удалить"));assert.ok(directory.includes("Редактировать"));
+ data.people=data.people.filter(p=>p.id!=="outside");
+
  const groupForm=html(GroupEditor,{...props,branch,onSaved:()=>{}});assert.ok(groupForm.includes("Уровень группы"));assert.ok(!groupForm.includes("group-level-options"));assert.ok(!groupForm.includes("введите свой"));
  const beginner=html(Editor,{...props,editing:{kind:"check",value:{personId:pupil.id,assessmentType:"reading",groupId:"g",teacherId:"t"}}});
  for(const label of ["Буквы","Правила таджвида","Чтение","Посещаемость"])assert.ok(beginner.includes(label));
@@ -30,6 +39,7 @@ try{
  for(const level of ["Чтение","Хифз","Средний","Продвинутый"]){data.people[1]={...pupil,level};const reading=html(Editor,{...props,editing:{kind:"check",value:{personId:"p",assessmentType:"reading",groupId:"g",teacherId:"t"}}});for(const label of ["Махрадж","Таджвид","Хифз","Посещаемость","Пройденный материал"])assert.ok(reading.includes(label),`${level}: ${label}`);}
  for(const level of ["Начальный","Чтение","Хифз"]){const selected=html(Editor,{...props,editing:{kind:"check",value:{personId:"p",groupId:"g",teacherId:"t",assessmentType:level==="Начальный"?"beginner":"reading",assessmentLevel:level}}});for(const option of ["Начальный","Чтение","Хифз"])assert.ok(selected.includes(`value="${option}"`));assert.ok(!selected.includes("Как читает ученик"));assert.ok(!selected.includes("По Корану"));assert.ok(!selected.includes("Наизусть"));assert.match(selected,new RegExp(`checked="" value="${level}"`));}
  const legacy=html(Editor,{...props,editing:{kind:"check",value:{...old,assessmentType:"reading",readingMode:"memory",groupId:"g",teacherId:"t"}}});assert.match(legacy,/checked="" value="Хифз"/);
+ const archivedGroupForm=html(Editor,{...props,data:{...data,groups:[{...group,archived:true}]},editing:{kind:"check",value:{...old,assessmentType:"reading",groupId:"g",teacherId:"t"}}});assert.ok(archivedGroupForm.includes("Нур"),"Historical reading form resolves an archived group");
  assert.deepEqual(model.defaultGroupLevels,["Начальный","Чтение","Хифз"]);assert.equal(levels.groupLevel("Читающие"),"Чтение");assert.equal(levels.groupLevel("Заучивающие"),"Хифз");assert.equal(levels.groupLevel("Только перешедшие на Коран"),"Чтение");assert.equal(levels.groupLevel("Своя группа"),"Своя группа");
  data.people[1]=pupil;
  const check={id:"c",personId:"p",date:"2026-10-01",assessmentType:"beginner",letters:8,rules:7,reading:6,attendance:9,note:"Повторить буквы"};data.checks=[check];

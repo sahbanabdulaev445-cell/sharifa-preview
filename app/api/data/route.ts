@@ -1,3 +1,4 @@
+import {planGroupAction} from "@/lib/group-actions";
 import {readData,saveRecords} from "@/lib/storage";
 import {recordSchemas as schemas,groupMembersSchema,groupSchedulesSchema,lessonTimesSchema} from "@/lib/record-schemas";
 import {Group,Person,Branch,branchNames,branchEntries} from "@/lib/analytics";
@@ -21,12 +22,14 @@ export async function POST(req:Request){
   const kind=body.kind as keyof typeof schemas,parsed=schemas[kind].safeParse(body.value);
   if(!parsed.success)return reply({error:parsed.error.issues.map(i=>i.message).join(". ")},400);
   const value=parsed.data,d=await readData(dataset(req)),groups=availableGroups(d);
+  if(kind==="group-action"){let changes;try{changes=planGroupAction(d,value as {id:string;action:"archive"|"restore"})}catch(error){return reply({error:error instanceof Error?error.message:"Не удалось изменить группу"},400)}await saveRecords(dataset(req),changes);return reply({ok:true,id:value.id})}
   if(kind==="branch-action"){let changes;try{changes=planBranchAction(d,value as BranchAction)}catch(error){return reply({error:error instanceof Error?error.message:"Не удалось изменить филиал"},400)}await saveRecords(dataset(req),changes);return reply({ok:true,id:value.id})}
   if(kind==="people-action"){let changes;try{changes=planPeopleAction(d,value as PeopleAction)}catch(error){return reply({error:error instanceof Error?error.message:"Не удалось изменить карточки"},400)}await saveRecords(dataset(req),changes);return reply({ok:true,id:value.id})}
-  const existing=[...d.people.map(p=>({kind:"person",id:p.id})),...groups.map(g=>({kind:"group",id:g.id})),...branchEntries(d).map(b=>({kind:"branch",id:b.id})),...d.checks.map(c=>({kind:"check",id:c.id})),...d.exams.map(e=>({kind:"exam",id:e.id})),{kind:"settings",id:"settings"},{kind:"marker",id:"initialized"}].find(r=>r.id===value.id);
+  const existing=[...d.people.map(p=>({kind:"person",id:p.id})),...[...d.groups,...groups].map(g=>({kind:"group",id:g.id})),...branchEntries(d).map(b=>({kind:"branch",id:b.id})),...d.checks.map(c=>({kind:"check",id:c.id})),...d.exams.map(e=>({kind:"exam",id:e.id})),{kind:"settings",id:"settings"},{kind:"marker",id:"initialized"}].find(r=>r.id===value.id);
   if(existing&&existing.kind!==kind)return reply({error:"Этот идентификатор уже занят другой записью"},400);
   const writes:{kind:string;value:{id:string;[key:string]:unknown}}[]=[];
   if((kind==="person"||kind==="group")&&"branch"in value&&!branchNames(d).includes(value.branch))return reply({error:"Сначала создайте этот филиал в разделе «Филиалы»"},400);
+  if(kind==="group"&&(d.groups.some(g=>g.id===value.id&&g.archived)||"archived"in value&&value.archived))return reply({error:"Сначала восстановите группу"},400);
   if(kind==="branch"){
    const b=value as Branch;
    if(b.replaces||b.archived)return reply({error:"Используйте действия редактирования филиала"},400);
@@ -55,9 +58,11 @@ export async function POST(req:Request){
    for(const p of before.filter(p=>!members.data.includes(p.id))){const detached={...p,groups:""};delete detached.groupId;writes.push({kind:"person",value:detached})}
    for(const p of selected as Person[])writes.push({kind:"person",value:{...p,groupId:g.id,groups:g.name,teacherId:g.teacherId,branch:g.branch}});
    const nextGroups=[...groups.filter(other=>other.id!==g.id),g];
-   for(const teacherId of new Set([g.teacherId,...(old?[old.teacherId]:[])])){
+   for(const teacherId of new Set([g.teacherId,...(old?[old.teacherId]:[]),...d.people.filter(p=>p.kind==="teacher"&&p.groupAssignments?.some(a=>a.groupId===g.id)).map(p=>p.id)])){
     const t=d.people.find(p=>p.id===teacherId)!;
-    writes.push({kind:"person",value:{...t,...(teacherId===g.teacherId&&t.groupAssignments&&!t.groupAssignments.some(a=>a.groupId===g.id)?{groupAssignments:[...t.groupAssignments,{groupId:g.id,days:g.days,startTime:g.startTime,endTime:g.endTime}]}:{}),groups:[...new Set(nextGroups.filter(other=>other.id===g.id&&teacherId===g.teacherId||teacherHasGroup(d,other,teacherId)).map(other=>other.name))].join(", ")}});
+    const assignments=t.groupAssignments?.map(a=>a.groupId===g.id&&teacherId===g.teacherId&&old&&a.startTime===old.startTime&&a.endTime===old.endTime&&JSON.stringify(a.days)===JSON.stringify(old.days)?{groupId:g.id,days:g.days,startTime:g.startTime,endTime:g.endTime}:a);
+    if(assignments&&teacherId===g.teacherId&&!assignments.some(a=>a.groupId===g.id))assignments.push({groupId:g.id,days:g.days,startTime:g.startTime,endTime:g.endTime});
+    writes.push({kind:"person",value:{...t,...(assignments?{groupAssignments:assignments}:{}),groups:[...new Set(nextGroups.filter(other=>other.id===g.id&&teacherId===g.teacherId||teacherHasGroup(d,other,teacherId)).map(other=>other.name))].join(", ")}});
    }
   }
   if(kind==="person"&&"kind"in value){
@@ -97,14 +102,14 @@ export async function POST(req:Request){
    const p=d.people.find(p=>p.id===value.personId&&!p.archived);if(!p)return reply({error:"Человек не найден"},400);
    if(value.assessmentType==="beginner"&&p.kind!=="student")return reply({error:"Начальная проверка доступна только ученикам"},400);
    if(value.assessmentType==="beginner"){
-    const g=groups.find(g=>g.id===value.groupId),old=d.checks.find(c=>c.id===value.id);
+    const old=d.checks.find(c=>c.id===value.id),g=groups.find(g=>g.id===value.groupId)??d.groups.find(g=>g.id===value.groupId&&g.archived&&old?.groupId===g.id&&old.personId===p.id);
     const historical=old?.assessmentType==="beginner"&&old.personId===p.id&&old.groupId===value.groupId&&old.teacherId===value.teacherId;
     if(value.groupId&&(!g||!historical&&!groupStudents(d,g).some(s=>s.id===p.id)))return reply({error:"Ученик не входит в выбранную группу"},400);
     if(value.teacherId&&!d.people.some(t=>t.id===value.teacherId&&t.kind==="teacher"&&(historical||!t.archived&&t.branch===p.branch&&(!g||teacherHasGroup(d,g,t.id)))))return reply({error:"Учитель не найден или не относится к выбранной группе"},400);
     if(g&&!d.groups.some(other=>other.id===g.id))writes.push({kind:"group",value:g});
    }
    if(value.assessmentType==="reading"){
-    const g=groups.find(g=>g.id===value.groupId),previous=d.checks.find(c=>c.id===value.id);
+    const previous=d.checks.find(c=>c.id===value.id),g=groups.find(g=>g.id===value.groupId)??d.groups.find(g=>g.id===value.groupId&&g.archived&&previous?.groupId===g.id&&previous.personId===p.id);
     const historical=previous?.assessmentType==="reading"&&previous.personId===p.id&&previous.groupId===value.groupId&&previous.teacherId===value.teacherId;
     if(p.kind!=="student"||value.groupId&&(!g||!historical&&!groupStudents(d,g).some(s=>s.id===p.id)))return reply({error:"Ученик должен входить в выбранную группу"},400);
     if(value.teacherId&&!d.people.some(t=>t.id===value.teacherId&&t.kind==="teacher"&&(historical||!t.archived&&t.branch===p.branch&&(!g||teacherHasGroup(d,g,t.id)))))return reply({error:"Учитель не найден или не относится к выбранной группе"},400);
