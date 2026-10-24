@@ -24,6 +24,13 @@ try{
  const overview=html(Workspace,workspaceProps);for(const label of ["Управление филиалом","Учителя","Группы","Ученики","Проверки","Основные данные","Сохранить данные филиала"])assert.ok(overview.includes(label));
  const teacherWorkspace=html(Workspace,{...workspaceProps,initialTab:"teachers"});assert.ok(teacherWorkspace.includes("Учитель"));assert.ok(teacherWorkspace.includes("Редактировать"));assert.ok(!teacherWorkspace.includes("Учитель чужого филиала"));
  const groupWorkspace=html(Workspace,{...workspaceProps,initialTab:"groups"});assert.ok(groupWorkspace.includes("Удалить"));assert.ok(groupWorkspace.includes("Редактировать"));assert.ok(groupWorkspace.includes("Нур"));
+ const recordsData=structuredClone(data),longComment="Повторить изученное. ".repeat(30)+"Конец полного комментария";
+ recordsData.checks=[{id:"view-beginner",personId:pupil.id,date:"2026-10-04",assessmentType:"beginner",letters:8,rules:7,reading:6,attendance:10,note:longComment},{id:"view-teacher",personId:teacher.id,date:"2026-10-03",makhraj:8,tajweed:9,hifz:7,attendance:10,note:"Проверка преподавателя"},{id:"view-outside",personId:"outside",date:"2026-10-05",makhraj:1,tajweed:1,hifz:1,attendance:1,note:"Чужая запись"},{id:"view-old",personId:pupil.id,date:"2026-01-04",makhraj:1,tajweed:1,hifz:1,attendance:1,note:"Вне периода"}];
+ recordsData.exams=[{id:"view-exam",teacherId:teacher.id,date:"2026-10-02",juz:30,makhraj:8,tajweed:9,hifz:10,attendance:10,note:"Экзамен преподавателя"}];
+ const recordsView=html(Workspace,{...workspaceProps,data:recordsData,initialTab:"checks",period:"2026-10"});
+ assert.equal((recordsView.match(/class="branch-record-card/g)??[]).length,3,"Cards include pupil, teacher and exam records from this branch and period only");
+ for(const label of ["Проверки и экзамены","Все записи","Экзамены","Буквы","Правила таджвида","Посещаемость","Итог","Полный комментарий","Конец полного комментария","Экзамен · 30 джуз","Изменить запись"])assert.ok(recordsView.includes(label),label);
+ for(const text of ["Чужая запись","Вне периода"])assert.ok(!recordsView.includes(text));
  const directory=html(Groups,{data,branch,period:"all",onSave:async()=>{},onEdit:()=>{},onDetail:()=>{}});assert.ok(directory.includes("Удалить"));assert.ok(directory.includes("Редактировать"));
  data.people=data.people.filter(p=>p.id!=="outside");
 
